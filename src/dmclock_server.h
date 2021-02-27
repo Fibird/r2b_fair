@@ -76,19 +76,20 @@ namespace crimson {
 	R, // reservation client
  	B, // bustable client
  	A  // area client	
-    }
+    };
 
     struct ClientInfo {
       double reservation;  // minimum
       double weight;       // proportional
       double limit;        // maximum
-      ClientType client_type;
 
       // multiplicative inverses of above, which we use in calculations
       // and don't want to recalculate repeatedly
       double reservation_inv;
       double weight_inv;
       double limit_inv;
+
+	  ClientType client_type;
 
       // order parameters -- min, "normal", max
       ClientInfo(double _reservation, double _weight, double _limit) :
@@ -98,6 +99,18 @@ namespace crimson {
 	reservation_inv(0.0 == reservation ? 0.0 : 1.0 / reservation),
 	weight_inv(     0.0 == weight      ? 0.0 : 1.0 / weight),
 	limit_inv(      0.0 == limit       ? 0.0 : 1.0 / limit)
+      {
+	// empty
+      }
+
+      ClientInfo(double _reservation, double _weight, double _limit, ClientType _client_type) :
+	reservation(_reservation),
+	weight(_weight),
+	limit(_limit),
+	reservation_inv(0.0 == reservation ? 0.0 : 1.0 / reservation),
+	weight_inv(     0.0 == weight      ? 0.0 : 1.0 / weight),
+	limit_inv(      0.0 == limit       ? 0.0 : 1.0 / limit),
+    client_type(_client_type)
       {
 	// empty
       }
@@ -157,7 +170,7 @@ namespace crimson {
 			 client.limit_inv,
 			 delta,
 			 false);
-	client_type = client.client_type;
+	// client_type = client.client_type;
 
 	assert(reservation < max_tag || proportion < max_tag);
       }
@@ -182,11 +195,11 @@ namespace crimson {
 	assert(reservation < max_tag || proportion < max_tag);
       }
 
-	  RequestTag(double _res, double _prop, double _lim, ClientType _ct const Time _arrival) :
+	  RequestTag(double _res, double _prop, double _lim, ClientType _ct, const Time _arrival) :
 	reservation(_res),
 	proportion(_prop),
 	limit(_lim),
-	client_type(_ct),
+	//client_type(_ct),
 	ready(false),
 	arrival(_arrival)
       {
@@ -197,7 +210,7 @@ namespace crimson {
 	reservation(other.reservation),
 	proportion(other.proportion),
 	limit(other.limit),
-	client_type(other.client_type),
+	//client_type(other.client_type),
 	ready(other.ready),
 	arrival(other.arrival)
       {
@@ -289,7 +302,7 @@ namespace crimson {
 	RequestTag tag;
 	C          client_id;
 	RequestRef request;
-	ClientType client_type;
+	// ClientType client_type;
 
       public:
 
@@ -330,7 +343,6 @@ namespace crimson {
 	c::IndIntruHeapData   reserv_heap_data {};
 	c::IndIntruHeapData   lim_heap_data {};
 	c::IndIntruHeapData   ready_heap_data {};
-	c::IndIntruHeapData   burst_heap_data {};
 #if USE_PROP_HEAP
 	c::IndIntruHeapData   prop_heap_data {};
 #endif
@@ -345,7 +357,7 @@ namespace crimson {
 	uint32_t			  resource;
 
 	// r0 counter
-	uint32_t			  r0_counter;
+	uint32_t			  r0_counter; 
 	// bustable request counter
 	uint32_t			  b_counter;
 
@@ -358,7 +370,9 @@ namespace crimson {
 	  idle(true),
 	  last_tick(current_tick),
 	  cur_rho(1),
-	  cur_delta(1)
+	  cur_delta(1),
+      r0_counter(0),
+      b_counter(0)
 	{
 	  // empty
 	}
@@ -768,13 +782,6 @@ namespace crimson {
 				    ReadyOption::raises,
 				    true>,
 		      B> ready_heap;
-	  c::IndIntruHeap<ClientRecRef,
-		      ClientRec,
-		      &ClientRec::burst_heap_data,
-		      ClientCompare<&RequestTag::burst,
-				    ReadyOption::ignore,
-				    false>,
-		      B> burst_heap; 
 
       // if all reservations are met and all other requestes are under
       // limit, this will allow the request next in terms of
@@ -871,7 +878,6 @@ namespace crimson {
 #endif
 	  limit_heap.push(client_rec);
 	  ready_heap.push(client_rec);
-	  burst_heap.push(client_rec);
 	  client_map[client_id] = client_rec;
 	  temp_client = &(*client_rec); // address of obj of shared_ptr
 	}
@@ -967,7 +973,6 @@ namespace crimson {
 	  resv_heap.adjust(client);
 	  limit_heap.adjust(client);
 	  ready_heap.adjust(client);
-	  burst_heap.adjust(client);
 #if USE_PROP_HEAP
 	  prop_heap.adjust(client);
 #endif
@@ -979,7 +984,6 @@ namespace crimson {
 	resv_heap.adjust(client);
 	limit_heap.adjust(client);
 	ready_heap.adjust(client);
-	burst_heap.adjust(client);
 #if USE_PROP_HEAP
 	prop_heap.adjust(client);
 #endif
@@ -1024,21 +1028,20 @@ namespace crimson {
 	prop_heap.demote(top);
 #endif
 	ready_heap.demote(top);
-	burst_heap.demote(top);
 
 	if (now - win_start < win_size) {
-		if (top.client.client_type == ClientType::B) {
-			top.client.b_counter++;
+		if (top.info->client_type == ClientType::B) {
+			top.b_counter++;
 		}
-		if (top.client.client_type == ClientType::R) {
-			top.client.r0_counter++;
+		if (top.info->client_type == ClientType::R) {
+			top.r0_counter++;
 		}
 	} else {
-		if (top.client.client_type == ClientType::B) {
-			top.client.b_counter = 0;
+		if (top.info->client_type == ClientType::B) {
+			top.b_counter = 0;
 		}
-		if (top.client.client_type == ClientType::R) {
-			top.client.r0_counter = 0;
+		if (top.info->client_type == ClientType::R) {
+			top.r0_counter = 0;
 		}
 		win_start = std::max(win_start + win_size, now);
 	}
@@ -1117,7 +1120,7 @@ namespace crimson {
 	  limits = &limit_heap.top();
 	}
 
-	auto& readys = ready_heap.top();
+	readys = ready_heap.top();
 	if (readys.has_request() &&
 	    readys.next_request().tag.ready &&
 	    readys.next_request().tag.proportion < max_tag) {
@@ -1419,12 +1422,12 @@ namespace crimson {
 	switch(next.heap_id) {
 	case super::HeapId::reservation:
 	  super::pop_process_request(this->resv_heap,
-				     process_f(result, PhaseType::reservation));
+				     process_f(result, PhaseType::reservation), now);
 	  ++this->reserv_sched_count;
 	  break;
 	case super::HeapId::ready:
 	  super::pop_process_request(this->ready_heap,
-				     process_f(result, PhaseType::priority));
+				     process_f(result, PhaseType::priority), now);
 	  { // need to use retn temporarily
 	    auto& retn = boost::get<typename PullReq::Retn>(result.data);
 	    super::reduce_reservation_tags(retn.client);
@@ -1625,13 +1628,14 @@ namespace crimson {
       C submit_top_request(IndIntruHeap<C1,typename super::ClientRec,C2,C3,B4>& heap,
 			   PhaseType phase) {
 	C client_result;
+    Time now = get_time();
 	super::pop_process_request(heap,
 				   [this, phase, &client_result]
 				   (const C& client,
 				    typename super::RequestRef& request) {
 				     client_result = client;
 				     handle_f(client, std::move(request), phase);
-				   });
+				   }, now);
 	return client_result;
       }
 

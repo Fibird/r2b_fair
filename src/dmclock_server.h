@@ -71,7 +71,7 @@ namespace crimson {
       -std::numeric_limits<double>::infinity() :
       std::numeric_limits<double>::lowest();
     constexpr uint tag_modulo = 1000000;
-
+    
 	enum ClientType {
 		R, // reservation client
 		B, // bustable client
@@ -82,6 +82,7 @@ namespace crimson {
       double reservation;  // minimum
       double weight;       // proportional
       double limit;        // maximum
+      ClientType client_type;
 
       // multiplicative inverses of above, which we use in calculations
       // and don't want to recalculate repeatedly
@@ -286,6 +287,7 @@ namespace crimson {
 	RequestTag tag;
 	C          client_id;
 	RequestRef request;
+	ClientType client_type;
 
       public:
 

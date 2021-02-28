@@ -71,7 +71,7 @@ namespace crimson {
       -std::numeric_limits<double>::infinity() :
       std::numeric_limits<double>::lowest();
     constexpr uint tag_modulo = 1000000;
-
+    
 	enum ClientType {
 		R, // reservation client
 		B, // burst client
@@ -291,6 +291,7 @@ namespace crimson {
 	RequestTag tag;
 	C          client_id;
 	RequestRef request;
+	ClientType client_type;
 
       public:
 

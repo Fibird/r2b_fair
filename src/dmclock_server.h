@@ -74,7 +74,7 @@ namespace crimson {
 
 	enum ClientType {
 		R, // reservation client
-		B, // bustable client
+		B, // burst client
 		A  // area client
     };
 
@@ -82,6 +82,7 @@ namespace crimson {
       double reservation;  // minimum
       double weight;       // proportional
       double limit;        // maximum
+      double resource;
 
       // multiplicative inverses of above, which we use in calculations
       // and don't want to recalculate repeatedly
@@ -126,6 +127,10 @@ namespace crimson {
 	  " 1/l:" << std::fixed << client.limit_inv <<
 	  " }";
 	return out;
+      }
+
+      void update_resource(double new_res) {
+          resource = new_res;
       }
     }; // class ClientInfo
 
@@ -338,10 +343,10 @@ namespace crimson {
 	uint32_t              cur_rho;
 	uint32_t              cur_delta;
 
-	uint32_t			  resource;
+	double			  resource;
 	// r0 counter
 	uint32_t			  r0_counter = 0; 
-	// bustable request counter
+	// burst request counter
 	uint32_t			  b_counter = 0;
 
 	ClientRec(C _client,
@@ -520,7 +525,7 @@ namespace crimson {
 
       size_t client_count() const {
 	DataGuard g(data_mtx);
-	return resv_heap.size();
+	return ready_heap.size();
       }
 
 
@@ -787,6 +792,8 @@ namespace crimson {
       Duration                  check_time;
       std::deque<MarkPoint>     clean_mark_points;
 	  
+	  // system capacity
+      double system_capacity;
 	  // start time of window
 	  Time win_start = 0.0;
 	  // size of time window
@@ -822,6 +829,30 @@ namespace crimson {
 			 std::bind(&PriorityQueueBase::do_clean, this)));
       }
 
+      template<typename Rep, typename Per>
+      PriorityQueueBase(ClientInfoFunc _client_info_f,
+                          std::chrono::duration<Rep,Per> _idle_age,
+                          std::chrono::duration<Rep,Per> _erase_age,
+                          std::chrono::duration<Rep,Per> _check_time,
+                          bool _allow_limit_break,
+                          double _anticipation_timeout,
+                          double _system_capacity) :
+                client_info_f(_client_info_f),
+                allow_limit_break(_allow_limit_break),
+                anticipation_timeout(_anticipation_timeout),
+                finishing(false),
+                idle_age(std::chrono::duration_cast<Duration>(_idle_age)),
+                erase_age(std::chrono::duration_cast<Duration>(_erase_age)),
+                check_time(std::chrono::duration_cast<Duration>(_check_time)),
+                system_capacity(_system_capacity)
+        {
+            assert(_erase_age >= _idle_age);
+            assert(_check_time < _idle_age);
+            cleaning_job =
+                    std::unique_ptr<RunEvery>(
+                            new RunEvery(check_time,
+                                         std::bind(&PriorityQueueBase::do_clean, this)));
+        }
 
       ~PriorityQueueBase() {
 	finishing = true;
@@ -1063,6 +1094,8 @@ namespace crimson {
 
       // data_mtx should be held when called
       NextReq do_next_request(Time now) {
+          // update clients' resource
+          update_client_res();
 	// if reservation queue is empty, all are empty (i.e., no
 	// active clients)
 	if(resv_heap.empty()) {
@@ -1098,7 +1131,7 @@ namespace crimson {
 	  limits = &limit_heap.top();
 	}
 
-	// try burstable based scheduling
+	// try burst based scheduling
 	auto& readys = ready_heap.top();
 	if (readys.b_counter < readys.resource * win_size) {
 		return NextReq(HeapId::ready);
@@ -1110,7 +1143,7 @@ namespace crimson {
 	  return NextReq(HeapId::ready);
 	}
 
-	// if nothing is schedulable by reservation or
+	// if nothing is scheduled by reservation or
 	// proportion/weight, and if we allow limit break, try to
 	// schedule something with the lowest proportion tag or
 	// alternatively lowest reservation tag.
@@ -1219,6 +1252,25 @@ namespace crimson {
 	delete_from_heap(client, limit_heap);
 	delete_from_heap(client, ready_heap);
       }
+
+	  void set_win_size(Time _win_size) {
+		  win_size = _win_size;
+	  }
+
+	  void set_sys_cap(double _system_capacity) {
+		  system_capacity = _system_capacity;
+	  }
+
+	  size_t get_client_num() {
+          return client_map.count();
+      }
+
+      void update_client_res() {
+          assert(client_count() != 0 && system_capacity > 0.0);
+          for (auto c: client_map) {
+              c.second->resource = system_capacity / (double) client_count();
+          }
+      }
     }; // class PriorityQueueBase
 
 
@@ -1270,6 +1322,20 @@ namespace crimson {
 	// empty
       }
 
+      template<typename Rep, typename Per>
+      PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          std::chrono::duration<Rep,Per> _idle_age,
+                          std::chrono::duration<Rep,Per> _erase_age,
+                          std::chrono::duration<Rep,Per> _check_time,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double _anticipation_timeout = 0.0) :
+                super(_client_info_f,
+                      _idle_age, _erase_age, _check_time,
+                      _allow_limit_break, _anticipation_timeout)
+        {
+            // empty
+        }
 
       // pull convenience constructor
       PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
@@ -1285,6 +1351,21 @@ namespace crimson {
 	// empty
       }
 
+        // pull convenience constructor
+        PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double _anticipation_timeout = 0.0) :
+                PullPriorityQueue(_client_info_f,
+                                  std::chrono::minutes(10),
+                                  std::chrono::minutes(15),
+                                  std::chrono::minutes(6),
+                                  _system_capacity,
+                                  _allow_limit_break,
+                                  _anticipation_timeout)
+        {
+            // empty
+        }
 
       inline void add_request(R&& request,
 			      const C& client_id,

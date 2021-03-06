@@ -24,7 +24,6 @@ endif()
 
 add_subdirectory(src)
 add_subdirectory(sim)
-add_subdirectory(sim2)
 
 enable_testing()
 add_subdirectory(test)

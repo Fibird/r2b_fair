@@ -349,6 +349,8 @@ namespace crimson {
 	uint32_t			  r0_counter = 0; 
 	// burst request counter
 	uint32_t			  b_counter = 0;
+	// burst slice: t = resource * win_size / limit
+	Time burst_slice = 1.0;
 
 	ClientRec(C _client,
 		  const ClientInfo* _info,
@@ -471,6 +473,11 @@ namespace crimson {
 	  out << " }";
 
 	  return out;
+	}
+	void update_burst_slice(double win_size) {
+	    if (info->client_type == ClientType::B) {
+	        burst_slice = resource * win_size * info->limit_inv;
+	    }
 	}
       }; // class ClientRec
 
@@ -896,7 +903,7 @@ namespace crimson {
 	  client_map[client_id] = client_rec;
 	  temp_client = &(*client_rec); // address of obj of shared_ptr
 	}
-
+	temp_client->update_burst_slice(win_size);
 	// for convenience, we'll create a reference to the shared pointer
 	ClientRec& client = *temp_client;
 
@@ -1045,16 +1052,16 @@ namespace crimson {
 	ready_heap.demote(top);
 
 	if (now - win_start < win_size) {
-		if (top.info->client_type == ClientType::B) {
-			top.b_counter++;
-		}
+//		if (top.info->client_type == ClientType::B) {
+//			top.b_counter++;
+//		}
 		if (top.info->client_type == ClientType::R) {
 			top.r0_counter++;
 		}
 	} else {
-		if (top.info->client_type == ClientType::B) {
-			top.b_counter = 0;
-		}
+//		if (top.info->client_type == ClientType::B) {
+//			top.b_counter = 0;
+//		}
 		if (top.info->client_type == ClientType::R) {
 			top.r0_counter = 0;
 		}
@@ -1106,15 +1113,16 @@ namespace crimson {
 	// try constraint (reservation) based scheduling
 
 	auto& reserv = resv_heap.top();
-	if (reserv.has_request() &&
+	if (reserv.info->client_type == ClientType::R &&
+	    reserv.has_request() &&
 	    reserv.next_request().tag.reservation <= now) {
 	  return NextReq(HeapId::reservation);
 	}
 
-	if (reserv.has_request() &&
-	    reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
-	  return NextReq(HeapId::reservation);
-	}
+//	if (reserv.has_request() &&
+//	    reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
+//	  return NextReq(HeapId::reservation);
+//	}
 
 	// no existing reservations before now, so try weight-based
 	// scheduling
@@ -1134,11 +1142,27 @@ namespace crimson {
 
 	// try burst based scheduling
 	auto& readys = ready_heap.top();
-	if (readys.b_counter < readys.resource * win_size) {
-		return NextReq(HeapId::ready);
-	}
+//	if (readys.b_counter < readys.resource * win_size) {
+//		return NextReq(HeapId::ready);
+//	}
+    if (readys.info->client_type == ClientType::B) {
+        if ((now - win_start) < readys.burst_slice &&
+            readys.has_request() &&
+            readys.next_request().tag.ready &&
+            readys.next_request().tag.proportion < max_tag) {
+            return NextReq(HeapId::ready);
+        }
+    }
+
+    if (reserv.info->client_type == ClientType::R &&
+        reserv.has_request() &&
+        reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
+        return NextReq(HeapId::reservation);
+    }
+
 	//auto& readys = ready_heap.top();
-	if (readys.has_request() &&
+	if (readys.info->client_type == ClientType::A &&
+	    readys.has_request() &&
 	    readys.next_request().tag.ready &&
 	    readys.next_request().tag.proportion < max_tag) {
 	  return NextReq(HeapId::ready);

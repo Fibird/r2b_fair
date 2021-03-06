@@ -98,7 +98,8 @@ int main(int argc, char* argv[]) {
       client_info.push_back(test::dmc::ClientInfo 
 			  { cli_group[i].client_reservation,
 			    cli_group[i].client_weight,
-			    cli_group[i].client_limit } );
+			    cli_group[i].client_limit,
+			    test::dmc::ClientType(cli_group[i].client_type)} );
     }
 
     auto ret_client_group_f = [&](const ClientId& c) -> uint {

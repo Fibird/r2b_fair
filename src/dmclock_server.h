@@ -74,7 +74,7 @@ namespace crimson {
     
 	enum ClientType {
 		R, // reservation client
-		B, // bustable client
+		B, // burst client
 		A  // area client
     };
 
@@ -82,7 +82,7 @@ namespace crimson {
       double reservation;  // minimum
       double weight;       // proportional
       double limit;        // maximum
-      ClientType client_type;
+      double resource;
 
       // multiplicative inverses of above, which we use in calculations
       // and don't want to recalculate repeatedly
@@ -127,6 +127,10 @@ namespace crimson {
 	  " 1/l:" << std::fixed << client.limit_inv <<
 	  " }";
 	return out;
+      }
+
+      void update_resource(double new_res) {
+          resource = new_res;
       }
     }; // class ClientInfo
 
@@ -340,11 +344,13 @@ namespace crimson {
 	uint32_t              cur_rho;
 	uint32_t              cur_delta;
 
-	uint32_t			  resource;
+	double			  resource;
 	// r0 counter
 	uint32_t			  r0_counter = 0; 
-	// bustable request counter
+	// burst request counter
 	uint32_t			  b_counter = 0;
+	// burst slice: t = resource * win_size / limit
+	Time burst_slice = 1.0;
 
 	ClientRec(C _client,
 		  const ClientInfo* _info,
@@ -468,6 +474,11 @@ namespace crimson {
 
 	  return out;
 	}
+	void update_burst_slice(double win_size) {
+	    if (info->client_type == ClientType::B) {
+	        burst_slice = resource * win_size * info->limit_inv;
+	    }
+	}
       }; // class ClientRec
 
       using ClientRecRef = std::shared_ptr<ClientRec>;
@@ -522,7 +533,7 @@ namespace crimson {
 
       size_t client_count() const {
 	DataGuard g(data_mtx);
-	return resv_heap.size();
+	return ready_heap.size();
       }
 
 
@@ -789,6 +800,8 @@ namespace crimson {
       Duration                  check_time;
       std::deque<MarkPoint>     clean_mark_points;
 	  
+	  // system capacity
+      double system_capacity;
 	  // start time of window
 	  Time win_start = 0.0;
 	  // size of time window
@@ -824,6 +837,30 @@ namespace crimson {
 			 std::bind(&PriorityQueueBase::do_clean, this)));
       }
 
+      template<typename Rep, typename Per>
+      PriorityQueueBase(ClientInfoFunc _client_info_f,
+                          std::chrono::duration<Rep,Per> _idle_age,
+                          std::chrono::duration<Rep,Per> _erase_age,
+                          std::chrono::duration<Rep,Per> _check_time,
+                          bool _allow_limit_break,
+                          double _anticipation_timeout,
+                          double _system_capacity) :
+                client_info_f(_client_info_f),
+                allow_limit_break(_allow_limit_break),
+                anticipation_timeout(_anticipation_timeout),
+                finishing(false),
+                idle_age(std::chrono::duration_cast<Duration>(_idle_age)),
+                erase_age(std::chrono::duration_cast<Duration>(_erase_age)),
+                check_time(std::chrono::duration_cast<Duration>(_check_time)),
+                system_capacity(_system_capacity)
+        {
+            assert(_erase_age >= _idle_age);
+            assert(_check_time < _idle_age);
+            cleaning_job =
+                    std::unique_ptr<RunEvery>(
+                            new RunEvery(check_time,
+                                         std::bind(&PriorityQueueBase::do_clean, this)));
+        }
 
       ~PriorityQueueBase() {
 	finishing = true;
@@ -845,6 +882,8 @@ namespace crimson {
 			  const Time time,
 			  const double cost = 0.0) {
 	++tick;
+    // update clients' resource
+    update_client_res();
 
 	// this pointer will help us create a reference to a shared
 	// pointer, no matter which of two codepaths we take
@@ -866,7 +905,7 @@ namespace crimson {
 	  client_map[client_id] = client_rec;
 	  temp_client = &(*client_rec); // address of obj of shared_ptr
 	}
-
+	temp_client->update_burst_slice(win_size);
 	// for convenience, we'll create a reference to the shared pointer
 	ClientRec& client = *temp_client;
 
@@ -1015,16 +1054,16 @@ namespace crimson {
 	ready_heap.demote(top);
 
 	if (now - win_start < win_size) {
-		if (top.info->client_type == ClientType::B) {
-			top.b_counter++;
-		}
+//		if (top.info->client_type == ClientType::B) {
+//			top.b_counter++;
+//		}
 		if (top.info->client_type == ClientType::R) {
 			top.r0_counter++;
 		}
 	} else {
-		if (top.info->client_type == ClientType::B) {
-			top.b_counter = 0;
-		}
+//		if (top.info->client_type == ClientType::B) {
+//			top.b_counter = 0;
+//		}
 		if (top.info->client_type == ClientType::R) {
 			top.r0_counter = 0;
 		}
@@ -1074,15 +1113,16 @@ namespace crimson {
 	// try constraint (reservation) based scheduling
 
 	auto& reserv = resv_heap.top();
-	if (reserv.has_request() &&
+	if (reserv.info->client_type == ClientType::R &&
+	    reserv.has_request() &&
 	    reserv.next_request().tag.reservation <= now) {
 	  return NextReq(HeapId::reservation);
 	}
 
-	if (reserv.has_request() &&
-	    reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
-	  return NextReq(HeapId::reservation);
-	}
+//	if (reserv.has_request() &&
+//	    reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
+//	  return NextReq(HeapId::reservation);
+//	}
 
 	// no existing reservations before now, so try weight-based
 	// scheduling
@@ -1100,19 +1140,35 @@ namespace crimson {
 	  limits = &limit_heap.top();
 	}
 
-	// try burstable based scheduling
+	// try burst based scheduling
 	auto& readys = ready_heap.top();
-	if (readys.b_counter < readys.resource * win_size) {
-		return NextReq(HeapId::ready);
-	}
+//	if (readys.b_counter < readys.resource * win_size) {
+//		return NextReq(HeapId::ready);
+//	}
+    if (readys.info->client_type == ClientType::B) {
+        if ((now - win_start) < readys.burst_slice &&
+            readys.has_request() &&
+            readys.next_request().tag.ready &&
+            readys.next_request().tag.proportion < max_tag) {
+            return NextReq(HeapId::ready);
+        }
+    }
+
+    if (reserv.info->client_type == ClientType::R &&
+        reserv.has_request() &&
+        reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
+        return NextReq(HeapId::reservation);
+    }
+
 	//auto& readys = ready_heap.top();
-	if (readys.has_request() &&
+	if (readys.info->client_type == ClientType::A &&
+	    readys.has_request() &&
 	    readys.next_request().tag.ready &&
 	    readys.next_request().tag.proportion < max_tag) {
 	  return NextReq(HeapId::ready);
 	}
 
-	// if nothing is schedulable by reservation or
+	// if nothing is scheduled by reservation or
 	// proportion/weight, and if we allow limit break, try to
 	// schedule something with the lowest proportion tag or
 	// alternatively lowest reservation tag.
@@ -1221,6 +1277,25 @@ namespace crimson {
 	delete_from_heap(client, limit_heap);
 	delete_from_heap(client, ready_heap);
       }
+
+	  void set_win_size(Time _win_size) {
+		  win_size = _win_size;
+	  }
+
+	  void set_sys_cap(double _system_capacity) {
+		  system_capacity = _system_capacity;
+	  }
+
+	  size_t get_client_num() {
+          return client_map.size();
+      }
+
+      void update_client_res() {
+          int client_num = get_client_num() == 0 ? 1 : get_client_num();
+          for (auto c: client_map) {
+              c.second->resource = system_capacity / (double) client_num;
+          }
+      }
     }; // class PriorityQueueBase
 
 
@@ -1272,6 +1347,20 @@ namespace crimson {
 	// empty
       }
 
+      template<typename Rep, typename Per>
+      PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          std::chrono::duration<Rep,Per> _idle_age,
+                          std::chrono::duration<Rep,Per> _erase_age,
+                          std::chrono::duration<Rep,Per> _check_time,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double _anticipation_timeout = 0.0) :
+                super(_client_info_f,
+                      _idle_age, _erase_age, _check_time,
+                      _allow_limit_break, _anticipation_timeout)
+        {
+            // empty
+        }
 
       // pull convenience constructor
       PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
@@ -1287,6 +1376,21 @@ namespace crimson {
 	// empty
       }
 
+        // pull convenience constructor
+        PullPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double _anticipation_timeout = 0.0) :
+                PullPriorityQueue(_client_info_f,
+                                  std::chrono::minutes(10),
+                                  std::chrono::minutes(15),
+                                  std::chrono::minutes(6),
+                                  _system_capacity,
+                                  _allow_limit_break,
+                                  _anticipation_timeout)
+        {
+            // empty
+        }
 
       inline void add_request(R&& request,
 			      const C& client_id,
@@ -1501,6 +1605,25 @@ namespace crimson {
 	sched_ahead_thd = std::thread(&PushPriorityQueue::run_sched_ahead, this);
       }
 
+        template<typename Rep, typename Per>
+        PushPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          CanHandleRequestFunc _can_handle_f,
+                          HandleRequestFunc _handle_f,
+                          std::chrono::duration<Rep,Per> _idle_age,
+                          std::chrono::duration<Rep,Per> _erase_age,
+                          std::chrono::duration<Rep,Per> _check_time,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double anticipation_timeout = 0.0) :
+                super(_client_info_f,
+                      _idle_age, _erase_age, _check_time, _system_capacity,
+                      _allow_limit_break, anticipation_timeout)
+        {
+            can_handle_f = _can_handle_f;
+            handle_f = _handle_f;
+            sched_ahead_thd = std::thread(&PushPriorityQueue::run_sched_ahead, this);
+        }
+
 
       // push convenience constructor
       PushPriorityQueue(typename super::ClientInfoFunc _client_info_f,
@@ -1520,6 +1643,24 @@ namespace crimson {
 	// empty
       }
 
+        PushPriorityQueue(typename super::ClientInfoFunc _client_info_f,
+                          CanHandleRequestFunc _can_handle_f,
+                          HandleRequestFunc _handle_f,
+                          double _system_capacity,
+                          bool _allow_limit_break = false,
+                          double _anticipation_timeout = 0.0) :
+                PushPriorityQueue(_client_info_f,
+                                  _can_handle_f,
+                                  _handle_f,
+                                  std::chrono::minutes(10),
+                                  std::chrono::minutes(15),
+                                  std::chrono::minutes(6),
+                                  _system_capacity,
+                                  _allow_limit_break,
+                                  _anticipation_timeout)
+        {
+            // empty
+        }
 
       ~PushPriorityQueue() {
 	this->finishing = true;

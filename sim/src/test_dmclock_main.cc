@@ -82,6 +82,7 @@ int main(int argc, char* argv[]) {
     const bool server_random_selection = g_conf.server_random_selection;
     const bool server_soft_limit = g_conf.server_soft_limit;
     const double anticipation_timeout = g_conf.anticipation_timeout;
+    const double system_capacity = g_conf.system_capacity;
     uint server_total_count = 0;
     uint client_total_count = 0;
 
@@ -98,7 +99,8 @@ int main(int argc, char* argv[]) {
       client_info.push_back(test::dmc::ClientInfo 
 			  { cli_group[i].client_reservation,
 			    cli_group[i].client_weight,
-			    cli_group[i].client_limit } );
+			    cli_group[i].client_limit,
+			    test::dmc::ClientType(cli_group[i].client_type)} );
     }
 
     auto ret_client_group_f = [&](const ClientId& c) -> uint {
@@ -188,7 +190,8 @@ int main(int argc, char* argv[]) {
                                   can_f,
                                   handle_f,
                                   server_soft_limit,
-                                  anticipation_timeout);
+                                  anticipation_timeout,
+                                  system_capacity);
     };
 
  

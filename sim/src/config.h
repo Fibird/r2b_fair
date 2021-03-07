@@ -114,6 +114,7 @@ namespace crimson {
       bool server_random_selection;
       bool server_soft_limit;
       double anticipation_timeout;
+      double system_capacity;
 
       std::vector<cli_group_t> cli_group;
       std::vector<srv_group_t> srv_group;
@@ -122,12 +123,14 @@ namespace crimson {
 		   uint _client_groups = 1,
 		   bool _server_random_selection = false,
 		   bool _server_soft_limit = true,
-		   double _anticipation_timeout = 0.0) :
+		   double _anticipation_timeout = 0.0,
+		   double _system_capacity = 40) :
 	server_groups(_server_groups),
 	client_groups(_client_groups),
 	server_random_selection(_server_random_selection),
 	server_soft_limit(_server_soft_limit),
-	anticipation_timeout(_anticipation_timeout)
+	anticipation_timeout(_anticipation_timeout),
+	system_capacity(_system_capacity)
       {
 	srv_group.reserve(server_groups);
 	cli_group.reserve(client_groups);
@@ -141,7 +144,8 @@ namespace crimson {
 	  "server_random_selection = " << sim_config.server_random_selection << "\n" <<
 	  "server_soft_limit = " << sim_config.server_soft_limit << "\n" <<
 	  std::fixed << std::setprecision(3) << 
-	  "anticipation_timeout = " << sim_config.anticipation_timeout;
+	  "anticipation_timeout = " << sim_config.anticipation_timeout << "\n" <<
+	  "system_capacity = " << sim_config.system_capacity;
 	return out;
       }
     }; // class sim_config_t

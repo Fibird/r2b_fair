@@ -1154,10 +1154,10 @@ namespace crimson {
         }
     }
 
-    if (reserv.info->client_type == ClientType::R &&
-        reserv.has_request() &&
-        reserv.r0_counter < (reserv.resource - reserv.info->reservation) * win_size) {
-        return NextReq(HeapId::reservation);
+    if (readys.info->client_type == ClientType::R &&
+        readys.has_request() &&
+        readys.r0_counter < (readys.resource - readys.info->reservation) * win_size) {
+        return NextReq(HeapId::ready);
     }
 
 	//auto& readys = ready_heap.top();

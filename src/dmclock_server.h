@@ -99,7 +99,8 @@ namespace crimson {
 	limit(_limit),
 	reservation_inv(0.0 == reservation ? 0.0 : 1.0 / reservation),
 	weight_inv(     0.0 == weight      ? 0.0 : 1.0 / weight),
-	limit_inv(      0.0 == limit       ? 0.0 : 1.0 / limit)
+	limit_inv(      0.0 == limit       ? 0.0 : 1.0 / limit),
+	client_type(ClientType::A)
       {
 	// empty
       }
@@ -827,7 +828,8 @@ namespace crimson {
 	finishing(false),
 	idle_age(std::chrono::duration_cast<Duration>(_idle_age)),
 	erase_age(std::chrono::duration_cast<Duration>(_erase_age)),
-	check_time(std::chrono::duration_cast<Duration>(_check_time))
+	check_time(std::chrono::duration_cast<Duration>(_check_time)),
+	system_capacity(40)
       {
 	assert(_erase_age >= _idle_age);
 	assert(_check_time < _idle_age);

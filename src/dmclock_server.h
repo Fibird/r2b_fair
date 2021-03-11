@@ -527,8 +527,10 @@ namespace crimson {
 
 
       bool empty() const {
+          // TODO: to be modified
 	DataGuard g(data_mtx);
 	return (resv_heap.empty() || ! resv_heap.top().has_request());
+	//return (ready_heap.empty() || ! ready_heap.top().has_request());
       }
 
 
@@ -539,6 +541,7 @@ namespace crimson {
 
 
       size_t request_count() const {
+          // TODO: to be modified
 	DataGuard g(data_mtx);
 	size_t total = 0;
 	for (auto i = resv_heap.cbegin(); i != resv_heap.cend(); ++i) {
@@ -807,6 +810,7 @@ namespace crimson {
 	  Time win_start = 0.0;
 	  // size of time window
 	  Time win_size = 1.0;
+	  double total_wgt = 0.0;
 
       // NB: All threads declared at end, so they're destructed first!
 
@@ -905,6 +909,7 @@ namespace crimson {
 	  limit_heap.push(client_rec);
 	  ready_heap.push(client_rec);
 	  client_map[client_id] = client_rec;
+	  add_total_wgt(info->weight);
 	  temp_client = &(*client_rec); // address of obj of shared_ptr
 	}
 	temp_client->update_burst_slice(win_size);
@@ -1253,6 +1258,7 @@ namespace crimson {
 	    if (erase_point && i2->second->last_tick <= erase_point) {
 	      delete_from_heaps(i2->second);
 	      client_map.erase(i2);
+	      reduce_total_wgt(i2->second->info->weight);
 	    } else if (idle_point && i2->second->last_tick <= idle_point) {
 	      i2->second->idle = true;
 	    }
@@ -1293,10 +1299,18 @@ namespace crimson {
       }
 
       void update_client_res() {
-          int client_num = get_client_num() == 0 ? 1 : get_client_num();
+          //int client_num = get_client_num() == 0 ? 1 : get_client_num();
           for (auto c: client_map) {
-              c.second->resource = system_capacity / (double) client_num;
+              c.second->resource = system_capacity * c.second->info->weight / total_wgt;
           }
+      }
+
+      void add_total_wgt(double wgt) {
+          total_wgt += wgt;
+      }
+
+      void reduce_total_wgt(double wgt) {
+          if (total_wgt > wgt) total_wgt -= wgt;
       }
     }; // class PriorityQueueBase
 

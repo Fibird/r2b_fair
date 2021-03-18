@@ -1071,9 +1071,12 @@ namespace crimson {
 //		if (top.info->client_type == ClientType::B) {
 //			top.b_counter = 0;
 //		}
-		if (top.info->client_type == ClientType::R) {
-			top.r0_counter = 0;
-		}
+//		if (top.info->client_type == ClientType::R) {
+//			top.r0_counter = 0;
+//		}
+        for (auto c : client_map) {
+            c.second->r0_counter = 0;
+        }
 		win_start = std::max(win_start + win_size, now);
 	}
 
@@ -1163,7 +1166,7 @@ namespace crimson {
 
     if (readys.info->client_type == ClientType::R &&
         readys.has_request() &&
-        readys.r0_counter < (readys.resource - readys.info->reservation) * win_size) {
+        readys.r0_counter < (std::max(readys.resource - readys.info->reservation, 0.0) * win_size)) {
         return NextReq(HeapId::ready);
     }
 

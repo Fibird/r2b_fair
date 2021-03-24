@@ -970,7 +970,7 @@ namespace crimson {
       ClientId client1 = 52;
       // ClientId client2 = 8;
 
-      dmc::ClientInfo info(0.0, 1.0, 1.0, dmc::B);
+      dmc::ClientInfo info(0.0, 1.0, 1.0, dmc::A);
 
       auto client_info_f = [&] (ClientId c) -> const dmc::ClientInfo* {
 	return &info;

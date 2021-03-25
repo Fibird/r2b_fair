@@ -1048,7 +1048,7 @@ namespace crimson {
                 }
             };
 
-            pq = QueueRef(new Queue(client_info_f, 90, false));
+            pq = QueueRef(new Queue(client_info_f, 90, 30, false));
 
             ReqParams req_params(1,1);
 

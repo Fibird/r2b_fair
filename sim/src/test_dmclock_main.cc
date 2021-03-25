@@ -83,6 +83,7 @@ int main(int argc, char* argv[]) {
     const bool server_soft_limit = g_conf.server_soft_limit;
     const double anticipation_timeout = g_conf.anticipation_timeout;
     const double system_capacity = g_conf.system_capacity;
+    const double mclock_win_size = g_conf.mclock_win_size;
     uint server_total_count = 0;
     uint client_total_count = 0;
 
@@ -189,9 +190,10 @@ int main(int argc, char* argv[]) {
         return new test::DmcQueue(client_info_f,
                                   can_f,
                                   handle_f,
+                                  system_capacity,
+                                  mclock_win_size,
                                   server_soft_limit,
-                                  anticipation_timeout,
-                                  system_capacity);
+                                  anticipation_timeout);
     };
 
  

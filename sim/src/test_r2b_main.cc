@@ -13,7 +13,7 @@
  */
 
 
-#include "test_dmclock.h"
+#include "test_r2b.h"
 #include "config.h"
 
 #ifdef PROFILE

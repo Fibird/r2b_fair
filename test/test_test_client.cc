@@ -23,7 +23,7 @@
 #include "sim_recs.h"
 #include "sim_client.h"
 
-#include "test_dmclock.h"
+#include "test_r2b.h"
 
 
 using namespace std::placeholders;

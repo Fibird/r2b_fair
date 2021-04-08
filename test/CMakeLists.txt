@@ -7,11 +7,11 @@ include_directories(../src)
 include_directories(../support/src)
 include_directories(../sim/src)
 
-set(support_srcs ../sim/src/test_dmclock.cc)
+set(support_srcs ../sim/src/test_r2b.cc)
 set(test_srcs
   test_test_client.cc
-  test_dmclock_server.cc
-  test_dmclock_client.cc
+        test_r2b_server.cc
+        test_r2b_client.cc
   )
 
 set_source_files_properties(${core_srcs} ${test_srcs}

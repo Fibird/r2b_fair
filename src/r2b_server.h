@@ -50,8 +50,8 @@
 
 #include "indirect_intrusive_heap.h"
 #include "run_every.h"
-#include "dmclock_util.h"
-#include "dmclock_recs.h"
+#include "r2b_util.h"
+#include "r2b_recs.h"
 
 #ifdef PROFILE
 #include "profile.h"

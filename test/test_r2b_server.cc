@@ -20,12 +20,12 @@
 #include <vector>
 
 
-#include "dmclock_server.h"
+#include "r2b_server.h"
 #include "dmclock_util.h"
 #include "gtest/gtest.h"
 
 // process control to prevent core dumps during gtest death tests
-#include "dmcPrCtl.h"
+#include "r2bPrCtl.h"
 
 
 namespace dmc = crimson::dmclock;

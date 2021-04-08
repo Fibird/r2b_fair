@@ -13,8 +13,8 @@
  */
 
 
-#include "dmclock_recs.h"
-#include "dmclock_server.h"
+#include "r2b_recs.h"
+#include "r2b_server.h"
 #include "dmclock_client.h"
 
 #include "sim_recs.h"

@@ -1,9 +1,6 @@
 # dmclock
 
-This repository contains C++ 11 code that implements the dmclock
-distributed quality of service algorithm. See __mClock: Handling
-Throughput Variability for Hypervisor IO Scheduling__ by Gulati,
-Merchant, and Varman for a description of the algorithm.
+This repository contains C++ 11 code that implements the r2b fair scheduling algorithm.
 
 ## Running cmake
 
@@ -28,18 +25,3 @@ on by default. To disable this optimization/fix run cmake with:
 The `make` command builds a library libdmclock.a. That plus the header
 files in the src directory allow one to use the implementation in
 their code.
-
-### Building unit tests
-
-The `make dmclock-tests` command builds unit tests.
-
-### Building simulations
-
-The `make dmclock-sims` command builds two simulations -- *dmc_sim*
-and *ssched_sim* -- which incorporate, respectively, the dmclock
-priority queue or a very simple scheduler for comparison. Other
-priority queue implementations could be added in the future.
-
-## dmclock API
-
-To be written....

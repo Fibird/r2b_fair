@@ -1,4 +1,4 @@
-# dmclock
+# r2b
 
 This repository contains C++ 11 code that implements the r2b fair scheduling algorithm.
 

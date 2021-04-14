@@ -1466,8 +1466,9 @@ namespace crimson {
               c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
               if (c.second->info->client_type == ClientType::R) {
                   c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
-                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
-                          c.second->info->reservation : 0;
+//                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
+//                          c.second->info->reservation : 0;
+                  c.second->deltar = c.second->info->weight;
               }
           }
       }
@@ -1708,6 +1709,10 @@ namespace crimson {
 	case super::HeapId::deltar:
       super::pop_process_request(this->deltar_heap,
                      process_f(result, PhaseType::priority), now);
+      { // need to use retn temporarily
+	    auto& retn = boost::get<typename PullReq::Retn>(result.data);
+	    super::reduce_reservation_tags(retn.client);
+	  }
       ++this->reserv_sched_count;
       break;
 	case super::HeapId::burst:
@@ -1863,8 +1868,6 @@ namespace crimson {
                                   _allow_limit_break,
                                   _anticipation_timeout)
         {
-            std::cout << 1733 << ": system capacity: " << _system_capacity << std::endl;
-            std::cout << 1731 << ": win_size: " << _mclock_win_size << std::endl;
             // empty
         }
 

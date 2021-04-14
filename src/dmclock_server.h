@@ -6,6 +6,8 @@
  *
  * Author: Chaoyang Liu <lcy96@ruc.edu.cn>
  *
+ * Modified from dmclock (https://github.com/ceph/dmclock)
+ *
  * This is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License version
  * 2.1, as published by the Free Software Foundation.  See file
@@ -125,7 +127,7 @@ namespace crimson {
 	limit_inv(      0.0 == limit       ? 0.0 : 1.0 / limit),
     client_type(_client_type)
       {
-	// empty
+          // empty
       }
 
       friend std::ostream& operator<<(std::ostream& out,
@@ -197,7 +199,6 @@ namespace crimson {
 	RequestTag(prev_tag, client, req_params.delta, req_params.rho, time,
 		   cost, anticipation_timeout)
       { /* empty */ }
-
       RequestTag(double _res, double _prop, double _lim, const Time _arrival) :
 	reservation(_res),
 	proportion(_prop),
@@ -281,6 +282,9 @@ namespace crimson {
       // we don't want to include gtest.h just for FRIEND_TEST
       friend class dmclock_server_client_idle_erase_Test;
       friend class dmclock_server_client_resource_update_Test;
+      friend class dmclock_server_reserv_client_info_Test;
+      friend class dmclock_server_pull_ready_and_under_limit_Test;
+      friend class dmclock_server_pull_burst_duration_Test;
 
     public:
 
@@ -343,6 +347,7 @@ namespace crimson {
 	double                prop_delta = 0.0;
 
 	c::IndIntruHeapData   reserv_heap_data {};
+    c::IndIntruHeapData   deltar_heap_data {};
 	c::IndIntruHeapData   lim_heap_data {};
 	c::IndIntruHeapData   ready_heap_data {};
 	c::IndIntruHeapData   burst_heap_data {};
@@ -360,7 +365,9 @@ namespace crimson {
 
 	double			  resource;
 	// r0 counter
-	uint32_t			  r0_counter = 0; 
+	uint32_t			  r0_counter = 0;
+	double                deltar;
+	double                dlimit;
 	// burst request counter
 	uint32_t			  b_counter = 0;
 	// burst slice: t = resource * win_size / limit
@@ -579,18 +586,18 @@ namespace crimson {
 	    i.second->remove_by_req_filter(filter_accum, visit_backwards);
 	  if (modified) {
 		  // TODO: by different client type
-		  if (i.second->info.client_type == ClientType::R) {
+		  if (i.second->info->client_type == ClientType::R) {
               resv_heap.adjust(*i.second);
               deltar_heap.adjust(*i.second);
               limit_heap.adjust(*i.second);
 		  }
 
-          if (i.second->info.client_type == ClientType::B) {
+          if (i.second->info->client_type == ClientType::B) {
               burst_heap.adjust(*i.second);
               limit_heap.adjust(*i.second);
           }
 
-          if (i.second->info.client_type == ClientType::A) {
+          if (i.second->info->client_type == ClientType::A) {
               prop_heap.adjust(*i.second);
           }
 
@@ -632,19 +639,19 @@ namespace crimson {
 
 	i->second->requests.clear();
 // TODO: by different client type
-          if (i.second->info.client_type == ClientType::R) {
-              resv_heap.adjust(*i.second);
-              deltar_heap.adjust(*i.second);
-              limit_heap.adjust(*i.second);
+          if (i->second->info->client_type == ClientType::R) {
+              resv_heap.adjust(*i->second);
+              deltar_heap.adjust(*i->second);
+              limit_heap.adjust(*i->second);
           }
 
-          if (i.second->info.client_type == ClientType::B) {
-              burst_heap.adjust(*i.second);
-              limit_heap.adjust(*i.second);
+          if (i->second->info->client_type == ClientType::B) {
+              burst_heap.adjust(*i->second);
+              limit_heap.adjust(*i->second);
           }
 
-          if (i.second->info.client_type == ClientType::A) {
-              prop_heap.adjust(*i.second);
+          if (i->second->info->client_type == ClientType::A) {
+              prop_heap.adjust(*i->second);
           }
 
     reduce_total_wgt(i->second->info->weight);
@@ -712,6 +719,7 @@ namespace crimson {
 	DataGuard g(data_mtx);
 	if (show_res) {
 	  resv_heap.display_sorted(out << "RESER:", filter);
+	  deltar_heap.display_sorted(out << "DELTA:", filter);
 	}
 	if (show_lim) {
 	  limit_heap.display_sorted(out << "LIMIT:", filter);
@@ -804,10 +812,10 @@ namespace crimson {
 		      B> resv_heap;
         c::IndIntruHeap<ClientRecRef,
                 ClientRec,
-                &ClientRec::reserv_heap_data,
-                ClientCompare<&RequestTag::reservation,
-                        ReadyOption::ignore,
-                        false>,
+                &ClientRec::deltar_heap_data,
+                ClientCompare<&RequestTag::proportion,
+                        ReadyOption::raises,
+                        true>,
                 B> deltar_heap;
 //#if USE_PROP_HEAP
       c::IndIntruHeap<ClientRecRef,
@@ -932,6 +940,16 @@ namespace crimson {
 	return client.info;
       }
 
+      const ClientInfo* client_info_wrapper(ClientRec& client) {
+          if (is_dynamic_cli_info_f) {
+              client.info = client_info_f(client.client);
+          }
+          if (client.info->client_type == ClientType::R) {
+              const std::shared_ptr<ClientInfo> info(new ClientInfo(client.info->reservation, client.deltar, client.dlimit, ClientType::R));
+              return info.get();
+          }
+          return client.info;
+      }
 
       // data_mtx must be held by caller
       void do_add_request(RequestRef&& request,
@@ -954,8 +972,8 @@ namespace crimson {
 	    std::make_shared<ClientRec>(client_id, info, tick);
 	  if (info->client_type == ClientType::R) {
           resv_heap.push(client_rec);
-          deltar_heap.push(client_rec);
           limit_heap.push(client_rec);
+          deltar_heap.push(client_rec);
 	  }
 //#if USE_PROP_HEAP
       if (info->client_type == ClientType::A) {
@@ -1030,7 +1048,8 @@ namespace crimson {
 	RequestTag tag(0, 0, 0, time);
 
 	if (!client.has_request()) {
-	  const ClientInfo* client_info = get_cli_info(client);
+	  //const ClientInfo* client_info = get_cli_info(client);
+	  const ClientInfo* client_info = client_info_wrapper(client);
 	  assert(client_info);
 	  tag = RequestTag(client.get_req_tag(),
 			   *client_info,
@@ -1069,18 +1088,18 @@ namespace crimson {
 ////#if USE_PROP_HEAP
 //	  prop_heap.adjust(client);
 ////#endif
-        if (client.info.client_type == ClientType::R) {
+        if (client.info->client_type == ClientType::R) {
             resv_heap.adjust(client);
+            limit_heap.adjust(client);
             deltar_heap.adjust(client);
-            limit_heap.adjust(client);
         }
 
-        if (client.info.client_type == ClientType::B) {
+        if (client.info->client_type == ClientType::B) {
+            limit_heap.adjust(client);
             burst_heap.adjust(client);
-            limit_heap.adjust(client);
         }
 
-        if (client.info.client_type == ClientType::A) {
+        if (client.info->client_type == ClientType::A) {
             prop_heap.adjust(client);
         }
 	}
@@ -1095,18 +1114,18 @@ namespace crimson {
 ////#if USE_PROP_HEAP
 //	prop_heap.adjust(client);
 //#endif
-    if (client.info.client_type == ClientType::R) {
+    if (client.info->client_type == ClientType::R) {
         resv_heap.adjust(client);
+        limit_heap.adjust(client);
         deltar_heap.adjust(client);
-        limit_heap.adjust(client);
     }
 
-    if (client.info.client_type == ClientType::B) {
+    if (client.info->client_type == ClientType::B) {
+        limit_heap.adjust(client);
         burst_heap.adjust(client);
-        limit_heap.adjust(client);
     }
 
-    if (client.info.client_type == ClientType::A) {
+    if (client.info->client_type == ClientType::A) {
         prop_heap.adjust(client);
     }
       } // add_request
@@ -1132,7 +1151,8 @@ namespace crimson {
 #ifndef DO_NOT_DELAY_TAG_CALC
 	if (top.has_request()) {
 	  ClientReq& next_first = top.next_request();
-	  const ClientInfo* client_info = get_cli_info(top);
+//	  const ClientInfo* client_info = get_cli_info(top);
+	  const ClientInfo* client_info = client_info_wrapper(top);
 	  assert(client_info);
 	  next_first.tag = RequestTag(tag, *client_info,
 				      top.cur_delta, top.cur_rho,
@@ -1143,7 +1163,8 @@ namespace crimson {
 	  top.update_req_tag(next_first.tag, tick);
 	}
 #endif
-    const ClientInfo* client_info = get_cli_info(top);
+//    const ClientInfo* client_info = get_cli_info(top);
+    const ClientInfo* client_info = client_info_wrapper(top);
 	if (client_info->client_type == ClientType::R) {
         resv_heap.demote(top);
         deltar_heap.demote(top);
@@ -1155,7 +1176,7 @@ namespace crimson {
         limit_heap.adjust(top);
     }
 
-    if (client_info->client_type == ClientType::B) {
+    if (client_info->client_type == ClientType::A) {
         prop_heap.demote(top);
     }
 
@@ -1241,29 +1262,30 @@ namespace crimson {
 
 	// all items that are within limit are eligible based on
 	// priority
+	if (!limit_heap.empty()) {
+        auto limits = &limit_heap.top();
+        while (limits->has_request() &&
+               !limits->next_request().tag.ready &&
+               limits->next_request().tag.limit <= now) {
+            limits->next_request().tag.ready = true;
+            if (limits->info->client_type == ClientType::R) {
+                deltar_heap.promote(*limits);
+            }
+            if (limits->info->client_type == ClientType::B) {
+                burst_heap.promote(*limits);
+            }
+            limit_heap.demote(*limits);
 
-	auto limits = &limit_heap.top();
-	while (limits->has_request() &&
-	       !limits->next_request().tag.ready &&
-	       limits->next_request().tag.limit <= now) {
-	  limits->next_request().tag.ready = true;
-	  if (limits.info->client_type == ClientType::R) {
-          deltar_heap.promote(*limits);
-	  }
-	  if (limits.info->client_type == ClientType::R) {
-          burst_heap.promote(*limits);
-	  }
-	  limit_heap.demote(*limits);
-
-	  limits = &limit_heap.top();
-	}
+            limits = &limit_heap.top();
+        }
+    }
 
 	// try burst based scheduling
 	if (!burst_heap.empty()) {
         auto& bursts = burst_heap.top();
         //if (bursts.info->client_type == ClientType::B) {
 //            if ((now - win_start) < bursts.burst_slice &&
-        if (bursts.r0_counter < (std::max(bursts.resource, 0.0) * win_size) &&
+        if (bursts.b_counter < std::max(bursts.resource, 0.0) &&
             bursts.has_request() &&
             bursts.next_request().tag.ready &&
             bursts.next_request().tag.proportion < max_tag) {
@@ -1285,9 +1307,9 @@ namespace crimson {
     if (!prop_heap.empty()) {
         auto& props = prop_heap.top();
         if (//props.info->client_type == ClientType::A &&
-            props.has_request() &&
-            //props.next_request().tag.ready &&
-            /*props.next_request().tag.proportion < max_tag*/) {
+            props.has_request() /*&&
+            props.next_request().tag.ready &&
+            props.next_request().tag.proportion < max_tag*/) {
             return NextReq(HeapId::best_effort);
         }
         if (allow_limit_break) {
@@ -1306,8 +1328,13 @@ namespace crimson {
 	    if (!deltar_heap.empty()) {
             auto& deltar = deltar_heap.top();
             if (deltar.has_request() &&
-                deltar.next_request().tag.reservation < max_tag) {
+                deltar.next_request().tag.proportion < max_tag) {
                 return NextReq(HeapId::deltar);
+            }
+            auto& reserv = resv_heap.top();
+            if (reserv.has_request() &&
+                reserv.next_request().tag.reservation < max_tag) {
+                return NextReq(HeapId::reservation);
             }
 	    }
 	}
@@ -1321,14 +1348,15 @@ namespace crimson {
                     min_not_0_time(next_call,
                                    resv_heap.top().next_request().tag.reservation);
         }
-	}
-	if (!limit_heap.empty()) {
         if (limit_heap.top().has_request()) {
             const auto& next = limit_heap.top().next_request();
-//            assert(!next.tag.ready || max_tag == next.tag.proportion);
+            assert(!next.tag.ready || max_tag == next.tag.proportion);
             next_call = min_not_0_time(next_call, next.tag.limit);
         }
 	}
+//	if (!limit_heap.empty()) {
+//
+//	}
           if (next_call < TimeMax) {
               return NextReq(next_call);
           } else {
@@ -1433,9 +1461,14 @@ namespace crimson {
 
       void update_client_res() {
           //int client_num = get_client_num() == 0 ? 1 : get_client_num();
-          assert(!client_map.empty() && total_wgt >= 1);
+//          assert(!client_map.empty() && total_wgt >= 1);
           for (auto c: client_map) {
-              c.second->resource = system_capacity * c.second->info->weight / total_wgt;
+              c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
+              if (c.second->info->client_type == ClientType::R) {
+                  c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
+                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
+                          c.second->info->reservation : 0;
+              }
           }
       }
 
@@ -1445,6 +1478,11 @@ namespace crimson {
 
       void reduce_total_wgt(double wgt) {
           if (total_wgt > wgt) total_wgt -= wgt;
+      }
+
+      ClientInfo *get_real_client_info(const ClientRec& client) {
+        ClientInfo new_client = ClientInfo(client.info->reservation, client.deltar, client.dlimit);
+        return &new_client;
       }
     }; // class PriorityQueueBase
 
@@ -1669,7 +1707,7 @@ namespace crimson {
 	  break;
 	case super::HeapId::deltar:
       super::pop_process_request(this->deltar_heap,
-                     process_f(result, PhaseType::reservation), now);
+                     process_f(result, PhaseType::priority), now);
       ++this->reserv_sched_count;
       break;
 	case super::HeapId::burst:
@@ -1944,7 +1982,7 @@ namespace crimson {
 	  // tags here
 	  ++this->reserv_sched_count;
 	  break;
-    case super::HeapId::reservation:
+	case super::HeapId::deltar:
             // don't need to note client
       (void) submit_top_request(this->deltar_heap, PhaseType::priority);
             // unlike the other two cases, we do not reduce reservation

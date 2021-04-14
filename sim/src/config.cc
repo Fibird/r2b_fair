@@ -141,6 +141,10 @@ int crimson::qos_simulation::parse_config_file(const std::string &fname, sim_con
     g_conf.server_soft_limit = stobool(val);
   if (!cf.read("global", "anticipation_timeout", val))
     g_conf.anticipation_timeout = stod(val);
+  if (!cf.read("global", "server_system_capacity", val))
+    g_conf.system_capacity = stod(val);
+  if (!cf.read("global", "mclock_win_size", val))
+    g_conf.mclock_win_size = stod(val);
 
   for (uint i = 0; i < g_conf.server_groups; i++) {
     srv_group_t st;
@@ -150,8 +154,6 @@ int crimson::qos_simulation::parse_config_file(const std::string &fname, sim_con
     if (!cf.read(section, "server_iops", val))
       st.server_iops = std::stoul(val);
     if (!cf.read(section, "server_threads", val))
-      st.server_threads = std::stoul(val);
-    if (!cf.read(section, "server_system_capacity", val))
       st.server_threads = std::stoul(val);
     g_conf.srv_group.push_back(st);
   }

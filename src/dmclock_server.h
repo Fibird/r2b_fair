@@ -549,8 +549,10 @@ namespace crimson {
       bool empty() const {
           // TODO: to be modified
 	DataGuard g(data_mtx);
-	return (resv_heap.empty() || ! resv_heap.top().has_request());
-	//return (burst_heap.empty() || ! burst_heap.top().has_request());
+//	return (resv_heap.empty() || ! resv_heap.top().has_request());
+	return (resv_heap.empty() || ! resv_heap.top().has_request()) &&
+	(burst_heap.empty() || ! burst_heap.top().has_request()) &&
+            (prop_heap.empty() || ! prop_heap.top().has_request());
       }
 
 

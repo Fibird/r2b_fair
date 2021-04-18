@@ -646,6 +646,7 @@ namespace crimson {
                     resv_heap.adjust(*i->second);
                     deltar_heap.adjust(*i->second);
                     limit_heap.adjust(*i->second);
+                    reduce_total_reserv(i->second->info->reservation);
                 }
 
                 if (i->second->info->client_type == ClientType::B) {
@@ -657,7 +658,7 @@ namespace crimson {
                     prop_heap.adjust(*i->second);
                 }
 
-                reduce_total_wgt(i->second->info->weight);
+                //reduce_total_wgt(i->second->info->weight);
                 update_client_res();
             }
 
@@ -672,9 +673,11 @@ namespace crimson {
                 auto client_it = client_map.find(client_id);
                 if (client_map.end() != client_it) {
                     ClientRec &client = (*client_it->second);
-                    reduce_total_wgt(client.info->weight);
+                    //reduce_total_wgt(client.info->weight);
+                    reduce_total_reserv(client.info->reservation);
                     client.info = client_info_f(client_id);
                     add_total_wgt(client.info->weight);
+                    //add_total_reserv(client.info->reservation);
                     update_client_res();
                 }
             }
@@ -871,6 +874,7 @@ namespace crimson {
             // size of time window
             Time win_size = 10.0;
             double total_wgt = 0.0;
+            double total_res = 0.0;
 
             // NB: All threads declared at end, so they're destructed first!
 
@@ -950,6 +954,11 @@ namespace crimson {
                             new ClientInfo(client.info->reservation, client.deltar, client.dlimit, ClientType::R));
                     return info.get();
                 }
+                if (client.info->client_type == ClientType::B) {
+                    const std::shared_ptr<ClientInfo> info(
+                            new ClientInfo(0.0, client.info->weight, client.dlimit, ClientType::B));
+                    return info.get();
+                }
                 return client.info;
             }
 
@@ -988,6 +997,7 @@ namespace crimson {
                     }
                     client_map[client_id] = client_rec;
                     add_total_wgt(info->weight);
+                    //add_total_reserv(info->reservation);
                     // update clients' resource
                     update_client_res();
                     temp_client = &(*client_rec); // address of obj of shared_ptr
@@ -1387,7 +1397,8 @@ namespace crimson {
                         if (erase_point && i2->second->last_tick <= erase_point) {
                             delete_from_heaps(i2->second);
                             client_map.erase(i2);
-                            reduce_total_wgt(i2->second->info->weight);
+                            //reduce_total_wgt(i2->second->info->weight);
+                            reduce_total_reserv(i2->second->info->reservation);
                             update_client_res();
                         } else if (idle_point && i2->second->last_tick <= idle_point) {
                             i2->second->idle = true;
@@ -1440,12 +1451,17 @@ namespace crimson {
                 for (auto c: client_map) {
                     c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
                     if (c.second->info->client_type == ClientType::R) {
-//                        c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
-c.second->dlimit = 0;
-                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
-                          c.second->info->reservation : 0;
-                        c.second->deltar = c.second->info->weight;
+                        c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
+                        c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
+                                                                                            c.second->info->reservation
+                                                                                          : 0;
+//                        c.second->deltar = c.second->info->weight;
+                        c.second->dlimit = 0;
                     }
+//                    if (c.second->info->client_type == ClientType::B) {
+//                        c.second->dlimit = c.second->info->limit >= total_res ?
+//                                c.second->info->limit - total_res : 0;
+//                    }
                 }
             }
 
@@ -1453,8 +1469,17 @@ c.second->dlimit = 0;
                 total_wgt += wgt;
             }
 
+            void add_total_reserv(double reserv) {
+                total_res += reserv;
+            }
+
             void reduce_total_wgt(double wgt) {
                 if (total_wgt > wgt) total_wgt -= wgt;
+            }
+
+            void reduce_total_reserv(double reserv) {
+                if (total_res >= reserv) total_res -= reserv;
+                else total_res = 0;
             }
 
             ClientInfo *get_real_client_info(const ClientRec &client) {
@@ -1686,7 +1711,7 @@ c.second->dlimit = 0;
                             auto &retn = boost::get<typename PullReq::Retn>(result.data);
                             super::reduce_reservation_tags(retn.client);
                         }
-                        ++this->reserv_sched_count;
+                        ++this->prop_sched_count;
                         break;
                     case super::HeapId::burst:
                         super::pop_process_request(this->burst_heap,
@@ -1942,10 +1967,27 @@ c.second->dlimit = 0;
                 return client_result;
             }
 
+            template<typename C1,
+                    IndIntruHeapData super::ClientRec::*C2,
+                    typename C3,
+                    uint B4>
+            C submit_top_request(IndIntruHeap<C1, typename super::ClientRec, C2, C3, B4> &heap,
+                                 PhaseType phase, bool is_delta) {
+                C client_result;
+                super::pop_process_request(heap,
+                                           [this, phase, &client_result]
+                                                   (const C &client,
+                                                    typename super::RequestRef &request) {
+                                               client_result = client;
+                                               handle_f(client, std::move(request), phase);
+                                           }, get_time(), is_delta);
+                return client_result;
+            }
+
 
             // data_mtx should be held when called
             void submit_request(typename super::HeapId heap_id) {
-                //C client;
+                C client;
                 switch (heap_id) {
                     case super::HeapId::reservation:
                         // don't need to note client
@@ -1956,14 +1998,14 @@ c.second->dlimit = 0;
                         break;
                     case super::HeapId::deltar:
                         // don't need to note client
-                        (void) submit_top_request(this->deltar_heap, PhaseType::priority);
                         // unlike the other two cases, we do not reduce reservation
+                        client = submit_top_request(this->deltar_heap, PhaseType::priority, true);
+                        super::reduce_reservation_tags(client);
                         // tags here
-                        ++this->reserv_sched_count;
+                        ++this->prop_sched_count;
                         break;
                     case super::HeapId::burst:
                         (void) submit_top_request(this->burst_heap, PhaseType::priority);
-//	  super::reduce_reservation_tags(client);
                         ++this->prop_sched_count;
                         break;
                     case super::HeapId::best_effort:

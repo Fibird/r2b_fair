@@ -220,6 +220,7 @@ int main(int argc, char* argv[]) {
 				 server_post_f,
 				 std::bind(server_select_f, _1, id),
 				 test::dmc_client_accumulate_f,
+				 client_info_f,
 				 cli_inst[i]);
     };
 

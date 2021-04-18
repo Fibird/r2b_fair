@@ -27,6 +27,7 @@
 
 #include "sim_recs.h"
 
+namespace dmc = crimson::dmclock;
 
 namespace crimson {
   namespace qos_simulation {
@@ -102,6 +103,8 @@ namespace crimson {
 
       using ClientAccumFunc = std::function<void(Accum&,const RespPm&)>;
 
+      using ClientInfoFunc = std::function<const dmc::ClientInfo *(const ClientId &)>;
+
       typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
 
       static TimePoint now() { return std::chrono::steady_clock::now(); }
@@ -118,6 +121,7 @@ namespace crimson {
       const SubmitFunc submit_f;
       const ServerSelectFunc server_select_f;
       const ClientAccumFunc accum_f;
+      const ClientInfoFunc client_info_f;
 
       std::vector<CliInst> instructions;
 
@@ -190,6 +194,48 @@ namespace crimson {
 	// empty
       }
 
+      SimulatedClient(ClientId _id,
+                      const SubmitFunc& _submit_f,
+                      const ServerSelectFunc& _server_select_f,
+                      const ClientAccumFunc& _accum_f,
+                      const ClientInfoFunc _client_info_f,
+                      uint16_t _ops_to_run,
+                      double _iops_goal,
+                      uint16_t _outstanding_ops_allowed) :
+              SimulatedClient(_id,
+                              _submit_f, _server_select_f, _accum_f,
+                              {{req_op, _ops_to_run, _iops_goal, _outstanding_ops_allowed}})
+      {
+          // empty
+      }
+
+        SimulatedClient(ClientId _id,
+                        const SubmitFunc& _submit_f,
+                        const ServerSelectFunc& _server_select_f,
+                        const ClientAccumFunc& _accum_f,
+                        const ClientInfoFunc& _client_info_f,
+                        const std::vector<CliInst>& _instrs) :
+                id(_id),
+                submit_f(_submit_f),
+                server_select_f(_server_select_f),
+                accum_f(_accum_f),
+                client_info_f(_client_info_f),
+                instructions(_instrs),
+                service_tracker(),
+                outstanding_ops(0),
+                requests_complete(false)
+        {
+            size_t op_count = 0;
+            for (auto i : instructions) {
+                if (CliOp::req == i.op) {
+                    op_count += i.args.req_params.count;
+                }
+            }
+            op_times.reserve(op_count);
+
+            thd_resp = std::thread(&SimulatedClient::run_resp, this);
+            thd_req = std::thread(&SimulatedClient::run_req, this);
+        }
 
       SimulatedClient(const SimulatedClient&) = delete;
       SimulatedClient(SimulatedClient&&) = delete;
@@ -257,6 +303,10 @@ namespace crimson {
 	      while (std::chrono::steady_clock::now() < delay_time) {
 		cv_req.wait_until(l, delay_time);
 	      } // while
+            if (client_info_f(id)->client_type == dmc::ClientType::B &&
+                o > 0 && o % 500 == 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(4000));
+            }
 	    } // for
 	    ops_count += i.args.req_params.count;
 	  } else {

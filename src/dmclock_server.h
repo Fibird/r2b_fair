@@ -1123,7 +1123,7 @@ namespace crimson {
             template<typename C1, IndIntruHeapData ClientRec::*C2, typename C3>
             void pop_process_request(IndIntruHeap<C1, ClientRec, C2, C3, B> &heap,
                                      std::function<void(const C &client,
-                                                        RequestRef &request)> process, Time now) {
+                                                        RequestRef &request)> process, Time now, bool is_delta = false) {
                 // gain access to data
                 ClientRec &top = heap.top();
 
@@ -1153,12 +1153,18 @@ namespace crimson {
 //    const ClientInfo* client_info = get_cli_info(top);
                 const ClientInfo *client_info = client_info_wrapper(top);
                 if (client_info->client_type == ClientType::R) {
+                    if (is_delta && now - win_start < win_size) {
+                        top.r0_counter++;
+                    }
                     resv_heap.demote(top);
                     deltar_heap.demote(top);
                     limit_heap.adjust(top);
                 }
 
                 if (client_info->client_type == ClientType::B) {
+                    if (top.info->client_type == ClientType::B) {
+                        top.b_counter++;
+                    }
                     burst_heap.demote(top);
                     limit_heap.adjust(top);
                 }
@@ -1168,28 +1174,10 @@ namespace crimson {
                 }
 
                 // TODO: update counter in do_next_request
-                if (now - win_start < win_size) {
-//		if (top.info->client_type == ClientType::B) {
-//			top.b_counter++;
-//		}
-//		if (top.info->client_type == ClientType::R) {
-//			top.r0_counter++;
-//		}
-                    if (top.info->client_type == ClientType::B) {
-                        top.b_counter++;
-                    }
-                } else {
-//		if (top.info->client_type == ClientType::B) {
-//			top.b_counter = 0;
-//		}
-//		if (top.info->client_type == ClientType::R) {
-//			top.r0_counter = 0;
-//		}
-//        for (auto c : client_map) {
-//            c.second->r0_counter = 0;
-//        }
+                if (now - win_start >= win_size) {
                     for (auto c : client_map) {
                         c.second->b_counter = 0;
+                        c.second->r0_counter = 0;
                     }
                     win_start = std::max(win_start + win_size, now);
                 }
@@ -1283,7 +1271,7 @@ namespace crimson {
 
                 if (!deltar_heap.empty()) {
                     auto &deltar = deltar_heap.top();
-                    if (//deltar.info->client_type == ClientType::R &&
+                    if (deltar.r0_counter < std::max(deltar.resource - deltar.info->reservation * win_size, 0.0) &&
                             deltar.has_request() &&
                             deltar.next_request().tag.ready &&
                             deltar.next_request().tag.proportion < max_tag) {
@@ -1294,17 +1282,17 @@ namespace crimson {
                 if (!prop_heap.empty()) {
                     auto &props = prop_heap.top();
                     if (//props.info->client_type == ClientType::A &&
-                            props.has_request() /*&&
-            props.next_request().tag.ready &&
-            props.next_request().tag.proportion < max_tag*/) {
+                            props.has_request() &&
+           // props.next_request().tag.ready &&
+            props.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::best_effort);
                     }
-                    if (allow_limit_break) {
-                        if (props.has_request() &&
-                            props.next_request().tag.proportion < max_tag) {
-                            return NextReq(HeapId::best_effort);
-                        }
-                    }
+//                    if (allow_limit_break) {
+//                        if (props.has_request() &&
+//                            props.next_request().tag.proportion < max_tag) {
+//                            return NextReq(HeapId::best_effort);
+//                        }
+//                    }
                 }
 
                 // if nothing is scheduled by reservation or
@@ -1452,9 +1440,10 @@ namespace crimson {
                 for (auto c: client_map) {
                     c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
                     if (c.second->info->client_type == ClientType::R) {
-                        c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
-//                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
-//                          c.second->info->reservation : 0;
+//                        c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
+c.second->dlimit = 0;
+                  c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
+                          c.second->info->reservation : 0;
                         c.second->deltar = c.second->info->weight;
                     }
                 }
@@ -1692,7 +1681,7 @@ namespace crimson {
                         break;
                     case super::HeapId::deltar:
                         super::pop_process_request(this->deltar_heap,
-                                                   process_f(result, PhaseType::priority), now);
+                                                   process_f(result, PhaseType::priority), now, true);
                         { // need to use retn temporarily
                             auto &retn = boost::get<typename PullReq::Retn>(result.data);
                             super::reduce_reservation_tags(retn.client);

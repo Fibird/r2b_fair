@@ -1082,14 +1082,6 @@ namespace crimson {
 	  // NB: can the following 4 calls to adjust be changed
 	  // promote? Can adding a request ever demote a client in the
 	  // heaps?
-	  // TODO: by different client type
-//	  resv_heap.adjust(client);
-//	  deltar_heap.adjuest(client);
-//	  limit_heap.adjust(client);
-//	  burst_heap.adjust(client);
-////#if USE_PROP_HEAP
-//	  prop_heap.adjust(client);
-////#endif
         if (client.info->client_type == ClientType::R) {
             resv_heap.adjust(client);
             limit_heap.adjust(client);
@@ -1108,14 +1100,7 @@ namespace crimson {
 
 	client.cur_rho = req_params.rho;
 	client.cur_delta = req_params.delta;
-// TODO: by different client type
-//	resv_heap.adjust(client);
-//	deltar_heap.adjust(client);
-//	limit_heap.adjust(client);
-//	burst_heap.adjust(client);
-////#if USE_PROP_HEAP
-//	prop_heap.adjust(client);
-//#endif
+
     if (client.info->client_type == ClientType::R) {
         resv_heap.adjust(client);
         limit_heap.adjust(client);

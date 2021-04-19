@@ -646,7 +646,7 @@ namespace crimson {
                     resv_heap.adjust(*i->second);
                     deltar_heap.adjust(*i->second);
                     limit_heap.adjust(*i->second);
-                    reduce_total_reserv(i->second->info->reservation);
+                    //reduce_total_reserv(i->second->info->reservation);
                 }
 
                 if (i->second->info->client_type == ClientType::B) {
@@ -658,7 +658,7 @@ namespace crimson {
                     prop_heap.adjust(*i->second);
                 }
 
-                //reduce_total_wgt(i->second->info->weight);
+                reduce_total_wgt(i->second->info->weight);
                 update_client_res();
             }
 
@@ -1333,8 +1333,7 @@ namespace crimson {
                                 min_not_0_time(next_call,
                                                resv_heap.top().next_request().tag.reservation);
                     }
-                }
-                if (!limit_heap.empty()) {
+                } else if (!limit_heap.empty()) {
                     if (limit_heap.top().has_request()) {
                         const auto &next = limit_heap.top().next_request();
                         assert(!next.tag.ready || max_tag == next.tag.proportion ||

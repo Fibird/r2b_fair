@@ -1420,14 +1420,14 @@ namespace crimson {
             void delete_from_heaps(ClientRecRef &client) {
                 if (client->info->client_type == ClientType::R) {
                     delete_from_heap(client, resv_heap);
-//              delete_from_heap(client, deltar_heap);
-//              delete_from_heap(client, limit_heap);
+                    delete_from_heap(client, deltar_heap);
+                    delete_from_heap(client, limit_heap);
                 }
                 if (client->info->client_type == ClientType::A) {
                     delete_from_heap(client, prop_heap);
                 }
                 if (client->info->client_type == ClientType::B) {
-//              delete_from_heap(client, limit_heap);
+                    delete_from_heap(client, limit_heap);
                     delete_from_heap(client, burst_heap);
                 }
             }
@@ -1445,8 +1445,6 @@ namespace crimson {
             }
 
             void update_client_res() {
-                //int client_num = get_client_num() == 0 ? 1 : get_client_num();
-//          assert(!client_map.empty() && total_wgt >= 1);
                 for (auto c: client_map) {
                     c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
                     if (c.second->info->client_type == ClientType::R) {

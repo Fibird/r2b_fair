@@ -1,6 +1,7 @@
 *~
 *.dSYM
 *.o
+*.log
 build*
 .idea/
 .vscode/

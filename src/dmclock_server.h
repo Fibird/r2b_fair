@@ -602,6 +602,7 @@ namespace crimson {
 
                         if (i.second->info->client_type == ClientType::A) {
                             prop_heap.adjust(*i.second);
+                            limit_heap.adjust(*i->second);
                         }
 
                         any_removed = true;
@@ -656,6 +657,7 @@ namespace crimson {
 
                 if (i->second->info->client_type == ClientType::A) {
                     prop_heap.adjust(*i->second);
+                    limit_heap.adjust(*i->second);
                 }
 
                 reduce_total_wgt(i->second->info->weight);
@@ -983,7 +985,7 @@ namespace crimson {
                             std::make_shared<ClientRec>(client_id, info, tick);
                     if (info->client_type == ClientType::R) {
                         resv_heap.push(client_rec);
-                        limit_heap.push(client_rec);
+                        //limit_heap.push(client_rec);
                         deltar_heap.push(client_rec);
                     }
 //#if USE_PROP_HEAP
@@ -992,9 +994,10 @@ namespace crimson {
                     }
 //#endif
                     if (info->client_type == ClientType::B) {
-                        limit_heap.push(client_rec);
+                        //limit_heap.push(client_rec);
                         burst_heap.push(client_rec);
                     }
+                    limit_heap.push(client_rec);
                     client_map[client_id] = client_rec;
                     add_total_wgt(info->weight);
                     //add_total_reserv(info->reservation);
@@ -1259,6 +1262,10 @@ namespace crimson {
                         if (limits->info->client_type == ClientType::B) {
                             burst_heap.promote(*limits);
                         }
+                        if (limits->info->client_type == ClientType::A) {
+                            prop_heap.promote(*limits);
+                        }
+
                         limit_heap.demote(*limits);
 
                         limits = &limit_heap.top();
@@ -1268,15 +1275,12 @@ namespace crimson {
                 // try burst based scheduling
                 if (!burst_heap.empty()) {
                     auto &bursts = burst_heap.top();
-                    //if (bursts.info->client_type == ClientType::B) {
-//            if ((now - win_start) < bursts.burst_slice &&
                     if (bursts.b_counter < std::max(bursts.resource, 0.0) &&
                         bursts.has_request() &&
                         bursts.next_request().tag.ready &&
                         bursts.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::burst);
                     }
-                    //}
                 }
 
                 if (!deltar_heap.empty()) {
@@ -1291,18 +1295,11 @@ namespace crimson {
 
                 if (!prop_heap.empty()) {
                     auto &props = prop_heap.top();
-                    if (//props.info->client_type == ClientType::A &&
-                            props.has_request() &&
-           // props.next_request().tag.ready &&
-            props.next_request().tag.proportion < max_tag) {
+                    if (props.has_request() &&
+                        props.next_request().tag.ready &&
+                        props.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::best_effort);
                     }
-//                    if (allow_limit_break) {
-//                        if (props.has_request() &&
-//                            props.next_request().tag.proportion < max_tag) {
-//                            return NextReq(HeapId::best_effort);
-//                        }
-//                    }
                 }
 
                 // if nothing is scheduled by reservation or
@@ -1420,8 +1417,7 @@ namespace crimson {
             void delete_from_heaps(ClientRecRef &client) {
                 if (client->info->client_type == ClientType::R) {
                     delete_from_heap(client, resv_heap);
-//              delete_from_heap(client, deltar_heap);
-//              delete_from_heap(client, limit_heap);
+                    delete_from_heap(client, deltar_heap);
                 }
                 if (client->info->client_type == ClientType::A) {
                     delete_from_heap(client, prop_heap);
@@ -1430,6 +1426,7 @@ namespace crimson {
 //              delete_from_heap(client, limit_heap);
                     delete_from_heap(client, burst_heap);
                 }
+                delete_from_heap(client, limit_heap);
             }
 
             void set_win_size(Time _win_size) {
@@ -1445,17 +1442,18 @@ namespace crimson {
             }
 
             void update_client_res() {
-                //int client_num = get_client_num() == 0 ? 1 : get_client_num();
-//          assert(!client_map.empty() && total_wgt >= 1);
                 for (auto c: client_map) {
-                    c.second->resource = system_capacity * c.second->info->weight * win_size / total_wgt;
+                    auto share_capacity = system_capacity * c.second->info->weight / total_wgt;
+                    c.second->resource = share_capacity * win_size;
                     if (c.second->info->client_type == ClientType::R) {
                         c.second->dlimit = system_capacity * c.second->info->weight / total_wgt;
                         c.second->deltar = c.second->dlimit > c.second->info->reservation ? c.second->dlimit -
                                                                                             c.second->info->reservation
                                                                                           : 0;
-//                        c.second->deltar = c.second->info->weight;
                         c.second->dlimit = 0;
+                    }
+                    if (c.second->info->client_type == ClientType::A) {
+                        c.second->dlimit = share_capacity + 1000;
                     }
 //                    if (c.second->info->client_type == ClientType::B) {
 //                        c.second->dlimit = c.second->info->limit >= total_res ?

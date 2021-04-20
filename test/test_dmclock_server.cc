@@ -1327,7 +1327,7 @@ namespace crimson {
                 return &info;
             };
 
-            QueueRef pq(new Queue(client_info_f, true));
+            QueueRef pq = QueueRef(new Queue(client_info_f, 1, 1, false));
 
             ReqParams req_params(1, 1);
 
@@ -1337,10 +1337,11 @@ namespace crimson {
             pq->add_request_time(Request{}, client1, req_params, now + 100);
             Queue::PullReq pr = pq->pull_request(now);
 
-            EXPECT_EQ(Queue::NextReqType::returning, pr.type);
+//            EXPECT_EQ(Queue::NextReqType::returning, pr.type);
+            EXPECT_EQ(Queue::NextReqType::future, pr.type);
 
-            auto &retn = boost::get<Queue::PullReq::Retn>(pr.data);
-            EXPECT_EQ(client1, retn.client);
+//            auto &retn = boost::get<Queue::PullReq::Retn>(pr.data);
+//            EXPECT_EQ(client1, retn.client);
         }
 
 

@@ -602,7 +602,7 @@ namespace crimson {
 
                         if (i.second->info->client_type == ClientType::A) {
                             prop_heap.adjust(*i.second);
-                            limit_heap.adjust(*i->second);
+                            limit_heap.adjust(*i.second);
                         }
 
                         any_removed = true;
@@ -1107,6 +1107,7 @@ namespace crimson {
                     }
 
                     if (client.info->client_type == ClientType::A) {
+                        limit_heap.adjust(client);
                         prop_heap.adjust(client);
                     }
                 }
@@ -1126,6 +1127,7 @@ namespace crimson {
                 }
 
                 if (client.info->client_type == ClientType::A) {
+                    limit_heap.adjust(client);
                     prop_heap.adjust(client);
                 }
             } // add_request
@@ -1184,6 +1186,7 @@ namespace crimson {
 
                 if (client_info->client_type == ClientType::A) {
                     prop_heap.demote(top);
+                    limit_heap.adjust(top);
                 }
 
                 // TODO: update counter in do_next_request

@@ -1064,6 +1064,7 @@ namespace crimson {
             int c2_count = 0;
             int c3_count = 0;
             int res_count = 0;
+            int delta_count = 0;
             for (int i = 0; i < 15; ++i) {
                 Queue::PullReq pr = pq->pull_request();
                 EXPECT_EQ(Queue::NextReqType::returning, pr.type);
@@ -1072,6 +1073,7 @@ namespace crimson {
                 if (client1 == retn.client) {
                     ++c1_count;
                     if (retn.phase == PhaseType::reservation) res_count++;
+                    if (retn.phase == PhaseType::priority) delta_count++;
                 } else if (client2 == retn.client) {
                     EXPECT_EQ(PhaseType::priority, retn.phase);
                     ++c2_count;
@@ -1090,6 +1092,7 @@ namespace crimson {
             EXPECT_EQ(3, res_count);
             EXPECT_EQ(5, c2_count);
             EXPECT_EQ(5, c3_count);
+            EXPECT_EQ(2, delta_count);
         }
 
         TEST(dmclock_server_pull, dynamic_cli_info_f) {

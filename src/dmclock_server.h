@@ -285,6 +285,8 @@ namespace crimson {
 
             friend class dmclock_server_pull_burst_duration_Test;
 
+            friend class dmclock_server_burst_client_info_Test;
+
         public:
 
             using RequestRef = std::unique_ptr<R>;
@@ -1235,9 +1237,8 @@ namespace crimson {
                 // try constraint (reservation) based scheduling
                 if (!resv_heap.empty()) {
                     auto &reserv = resv_heap.top();
-                    if (//reserv.info->client_type == ClientType::R &&
-                            reserv.has_request() &&
-                            reserv.next_request().tag.reservation <= now) {
+                    if (reserv.has_request() &&
+                        reserv.next_request().tag.reservation <= now) {
                         return NextReq(HeapId::reservation);
                     }
                 }
@@ -1268,41 +1269,31 @@ namespace crimson {
                 // try burst based scheduling
                 if (!burst_heap.empty()) {
                     auto &bursts = burst_heap.top();
-                    //if (bursts.info->client_type == ClientType::B) {
-//            if ((now - win_start) < bursts.burst_slice &&
                     if (bursts.b_counter < std::max(bursts.resource, 0.0) &&
                         bursts.has_request() &&
                         bursts.next_request().tag.ready &&
                         bursts.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::burst);
                     }
-                    //}
                 }
 
                 if (!deltar_heap.empty()) {
                     auto &deltar = deltar_heap.top();
                     if (deltar.r0_counter < std::max(deltar.resource - deltar.info->reservation * win_size, 0.0) &&
-                            deltar.has_request() &&
-                            deltar.next_request().tag.ready &&
-                            deltar.next_request().tag.proportion < max_tag) {
+                        deltar.has_request() &&
+//                        deltar.next_request().tag.ready &&
+                        deltar.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::deltar);
                     }
                 }
 
                 if (!prop_heap.empty()) {
                     auto &props = prop_heap.top();
-                    if (//props.info->client_type == ClientType::A &&
-                            props.has_request() &&
-           // props.next_request().tag.ready &&
-            props.next_request().tag.proportion < max_tag) {
+                    if (props.has_request() &&
+                        // props.next_request().tag.ready &&
+                        props.next_request().tag.proportion < max_tag) {
                         return NextReq(HeapId::best_effort);
                     }
-//                    if (allow_limit_break) {
-//                        if (props.has_request() &&
-//                            props.next_request().tag.proportion < max_tag) {
-//                            return NextReq(HeapId::best_effort);
-//                        }
-//                    }
                 }
 
                 // if nothing is scheduled by reservation or
@@ -1320,6 +1311,11 @@ namespace crimson {
                         if (reserv.has_request() &&
                             reserv.next_request().tag.reservation < max_tag) {
                             return NextReq(HeapId::reservation);
+                        }
+                        auto &bursts = burst_heap.top();
+                        if (bursts.has_request() &&
+                            bursts.next_request().tag.proportion < max_tag) {
+                            return NextReq(HeapId::burst);
                         }
                     }
                 }
@@ -1455,10 +1451,6 @@ namespace crimson {
 //                        c.second->deltar = c.second->info->weight;
                         c.second->dlimit = 0;
                     }
-//                    if (c.second->info->client_type == ClientType::B) {
-//                        c.second->dlimit = c.second->info->limit >= total_res ?
-//                                c.second->info->limit - total_res : 0;
-//                    }
                 }
             }
 

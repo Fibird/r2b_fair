@@ -34,8 +34,8 @@ def io_plot(plot_data, save_img=False):
         count = count + 1
 
     # ax.xaxis.set_major_locator(plt.MultipleLocator(50))
-    ax.yaxis.set_major_locator(plt.MultipleLocator(10))
-    ax.set(xlim=(0, len(xs) - 1), ylim=(0, 90))
+    #ax.yaxis.set_major_locator(plt.MultipleLocator(10))
+    ax.set(xlim=(0, len(xs) - 1), ylim=(0, 5000))
     ax.legend(loc='upper right')
 
     font1 = {'family': 'Times New Roman',
@@ -46,7 +46,7 @@ def io_plot(plot_data, save_img=False):
     plt.grid(color='0.7', linestyle=':')
     plt.tick_params(labelsize=16)
     labels = ax.get_xticklabels() + ax.get_yticklabels()
-    [label.set_fontname('Times New Roman') for label in labels]
+    # [label.set_fontname('Times New Roman') for label in labels]
     ax.set_xlabel("Time (sec)", font1)
     ax.set_ylabel("IOPS", font1)
 

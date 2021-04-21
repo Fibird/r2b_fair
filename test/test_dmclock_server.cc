@@ -1427,6 +1427,48 @@ namespace crimson {
                                                                "after: 2nd client's resource is updated by weight";
         }
 
+        TEST(dmclock_server, burst_client_info) {
+            using ClientId = int;
+            using Queue = dmc::PullPriorityQueue<ClientId, Request, false>;
+            using QueueRef = std::unique_ptr<Queue>;
+
+            ClientId client1 = 17;
+            ClientId client2 = 98;
+            ClientId client3 = 32;
+
+            dmc::ClientInfo info1(2000, 1.0, 0.0, dmc::ClientType::R);
+            dmc::ClientInfo info2(0, 1.0, 7000.0, dmc::ClientType::B);
+            dmc::ClientInfo info3(0, 1.0, 0.0, dmc::ClientType::A);
+
+            QueueRef pq;
+
+            auto client_info_f = [&](ClientId c) -> const dmc::ClientInfo * {
+                if (client1 == c) return &info1;//return &info1;
+                else if (client2 == c) return &info2;
+                else if (client3 == c) return &info3;
+                else {
+                    ADD_FAILURE() << "client info looked up for non-existant client";
+                    return nullptr;
+                }
+            };
+
+            pq = QueueRef(new Queue(client_info_f, 7000, 10, false));
+            ReqParams req_params(1, 1);
+
+            pq->add_request(Request{}, client1, req_params);
+            EXPECT_EQ(5000, pq->client_map[client1]->deltar);
+            EXPECT_EQ(0, pq->client_info_wrapper(*pq->client_map[client1])->limit);
+            EXPECT_EQ(5000, pq->client_info_wrapper(*pq->client_map[client1])->weight);
+
+            pq->add_request(Request{}, client2, req_params);
+
+            EXPECT_EQ(1500, pq->client_map[client1]->deltar);
+//            EXPECT_EQ(250, pq->client_map[client2]->deltar);
+            EXPECT_EQ(35000, pq->client_map[client2]->resource);
+            pq->add_request(Request{}, client3, req_params);
+            EXPECT_EQ(70000.0/3.0, pq->client_map[client2]->resource);
+        } // TEST
+
         TEST(dmclock_server, reserv_client_info) {
             using ClientId = int;
             using Queue = dmc::PullPriorityQueue<ClientId, Request, false>;

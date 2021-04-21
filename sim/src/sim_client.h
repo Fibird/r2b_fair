@@ -306,7 +306,7 @@ namespace crimson {
                                 cv_req.wait_until(l, delay_time);
                             } // while
                             if (client_info_f(id)->client_type == dmc::ClientType::B &&
-                                o > 0 && o % 500 == 0) {
+                                o > 0 && o % 20000 == 0) {
                                 std::this_thread::sleep_for(std::chrono::milliseconds(4000));
                             }
                         } // for

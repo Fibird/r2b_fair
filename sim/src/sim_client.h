@@ -88,6 +88,7 @@ namespace crimson {
                 std::chrono::nanoseconds get_req_params_time;
                 uint32_t track_resp_count;
                 uint32_t get_req_params_count;
+                std::vector<std::chrono::nanoseconds> resp_times;
 
                 InternalStats() :
                         track_resp_time(0),
@@ -349,8 +350,16 @@ namespace crimson {
                         TestResponse& resp = item.response;
 #endif
 
-                        time_stats(internal_stats.mtx,
+//                        time_stats(internal_stats.mtx,
+//                                   internal_stats.track_resp_time,
+//                                   [&]() {
+//                                       service_tracker.track_resp(item.server_id, item.resp_params);
+//                                   });
+//                        count_stats(internal_stats.mtx,
+//                                    internal_stats.track_resp_count);
+                        time_stats_log(internal_stats.mtx,
                                    internal_stats.track_resp_time,
+                                   internal_stats.resp_times,
                                    [&]() {
                                        service_tracker.track_resp(item.server_id, item.resp_params);
                                    });

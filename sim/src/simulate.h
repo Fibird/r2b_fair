@@ -25,6 +25,10 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include <fstream>
+#include <ctime>
+#include <cstdio>
+#include <algorithm>
 
 
 namespace crimson {
@@ -392,6 +396,18 @@ namespace crimson {
 	out << "client timing for QOS algorithm: " <<
 	  track_resp_time_unit + get_req_params_time_unit << " " <<
 	  time_unit << " per request/response" << std::endl;
+
+          for (uint i = 0; i < get_client_count(); ++i) {
+              const auto& client = get_client(i);
+              const auto& is = client.get_internal_stats();
+              out << "client " << i << "'s 95th" << " latency: ";
+              std::vector<long> tmps;
+              for (auto t : is.resp_times) {
+                  tmps.push_back(std::chrono::duration_cast<T>(t).count());
+              }
+              std::sort(tmps.begin(), tmps.end());
+              out << tmps[tmps.size() * 0.95] << std::endl;
+          }
       }
 
 
@@ -441,6 +457,18 @@ namespace crimson {
       // function to always choose the first server
       const ServerId& server_select_0(uint64_t seed, uint16_t client_idx) {
 	return server_ids[0];
+      }
+
+      void dump_stats() {
+          std::ofstream outfile;
+          time_t nowtime = time(NULL);
+          struct tm *p;
+          p = gmtime(&nowtime);
+
+          char filename[256] = {0};
+          sprintf(filename,"%d%d%d%d%d.log",1900+p->tm_year,1+p->tm_mon,p->tm_mday,p->tm_hour,p->tm_sec);
+          outfile.open(filename, std::ios::out);
+
       }
     }; // class Simulation
 

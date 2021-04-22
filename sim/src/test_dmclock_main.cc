@@ -15,6 +15,9 @@
 
 #include "test_dmclock.h"
 #include "config.h"
+#include <fstream>
+#include <ctime>
+#include <cstdio>
 
 #ifdef PROFILE
 #include "profile.h"
@@ -245,6 +248,19 @@ int main(int argc, char* argv[]) {
                               &test::server_data, &test::client_data,
                               server_disp_filter, client_disp_filter);
 
+    std::ofstream fout;
+    time_t nowtime = time(NULL);
+    struct tm *p;
+    p = gmtime(&nowtime);
+
+    char filename[256] = {0};
+    sprintf(filename,"r2b_%d%d%d%d%d.log",1900+p->tm_year,1+p->tm_mon,p->tm_mday,p->tm_hour,p->tm_sec);
+    fout.open(filename, std::ios::app);
+    fout << "test" << "\n";
+    simulation->display_stats(fout,
+                              &test::server_data, &test::client_data,
+                              server_disp_filter, client_disp_filter);
+    fout.close();
     delete simulation;
 } // main
 

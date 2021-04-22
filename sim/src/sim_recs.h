@@ -55,6 +55,21 @@ namespace crimson {
       time_accumulate += cast_duration;
     }
 
+      template<typename T>
+      void time_stats_log(std::mutex& mtx,
+                      T& time_accumulate,
+                      std::vector<T>& resp_times,
+                      std::function<void()> code) {
+          auto t1 = std::chrono::steady_clock::now();
+          code();
+          auto t2 = std::chrono::steady_clock::now();
+          auto duration = t2 - t1;
+          auto cast_duration = std::chrono::duration_cast<T>(duration);
+          std::lock_guard<std::mutex> lock(mtx);
+          time_accumulate += cast_duration;
+          resp_times.push_back(cast_duration);
+      }
+
     // unfortunately it's hard for the compiler to infer the types,
     // and therefore when called the template params might have to be
     // explicit

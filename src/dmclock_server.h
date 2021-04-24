@@ -1179,7 +1179,7 @@ namespace crimson {
 //    const ClientInfo* client_info = get_cli_info(top);
                 const ClientInfo *client_info = client_info_wrapper(top);
                 if (client_info->client_type == ClientType::R) {
-                    if (is_delta && now - win_start < win_size) {
+                    if (is_delta && (now - win_start) < win_size) {
                         top.r0_counter++;
                         reduce_reservation_tags(top);
                     }
@@ -1277,6 +1277,7 @@ namespace crimson {
                         if (limits->info->client_type == ClientType::B) {
                             burst_heap.promote(*limits);
                         }
+                        prop_heap.promote(*limits);
                         limit_heap.demote(*limits);
 
                         limits = &limit_heap.top();
@@ -1307,15 +1308,17 @@ namespace crimson {
 
                 auto &props = prop_heap.top();
                 if (props.has_request() &&
-                    (props.next_request().tag.ready || props.info->client_type == ClientType::A) &&
+                    //(props.next_request().tag.ready || props.info->client_type == ClientType::A) &&
                      props.next_request().tag.proportion < max_tag) {
                     if (props.info->client_type == ClientType::R &&
                         props.r0_counter < std::max(props.resource - props.info->reservation * win_size, 0.0)) {
                         return NextReq(HeapId::prop);
                     }
                     if (props.info->client_type == ClientType::B &&
-                        props.b_counter < std::max(props.resource, 0.0))
+                        props.next_request().tag.ready &&
+                        props.b_counter < std::max(props.resource, 0.0)) {
                         return NextReq(HeapId::prop);
+                    }
                     if (props.info->client_type == ClientType::A) {
                         return NextReq(HeapId::prop);
                     }
@@ -2018,7 +2021,7 @@ namespace crimson {
 
             // data_mtx should be held when called
             void submit_request(typename super::HeapId heap_id) {
-                C client;
+//                C client;
                 switch (heap_id) {
                     case super::HeapId::reservation:
                         // don't need to note client
@@ -2030,7 +2033,7 @@ namespace crimson {
                     case super::HeapId::deltar:
                         // don't need to note client
                         // unlike the other two cases, we do not reduce reservation
-                        client = submit_top_request(this->deltar_heap, PhaseType::priority, true);
+                        (void) submit_top_request(this->deltar_heap, PhaseType::priority, true);
 //                        super::reduce_reservation_tags(client);
                         // tags here
                         ++this->prop_sched_count;

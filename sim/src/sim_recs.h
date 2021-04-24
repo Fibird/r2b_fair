@@ -29,6 +29,7 @@
 #include <mutex>
 #include <iostream>
 #include <functional>
+#include <vector>
 
 
 using ClientId = uint;

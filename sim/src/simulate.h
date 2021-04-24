@@ -400,13 +400,17 @@ namespace crimson {
           for (uint i = 0; i < get_client_count(); ++i) {
               const auto& client = get_client(i);
               const auto& is = client.get_internal_stats();
-              out << "client " << i << "'s 95th" << " latency: ";
               std::vector<long> tmps;
               for (auto t : is.resp_times) {
                   tmps.push_back(std::chrono::duration_cast<T>(t).count());
               }
               std::sort(tmps.begin(), tmps.end());
+              out << "client " << i << "'s 95th" << " latency: ";
               out << tmps[tmps.size() * 0.95] << std::endl;
+              out << "client " << i << "'s 99th" << " latency: ";
+              out << tmps[tmps.size() * 0.99] << std::endl;
+              out << "client " << i << "'s max" << " latency: ";
+              out << tmps[tmps.size() - 1] << std::endl << std::endl;
           }
       }
 

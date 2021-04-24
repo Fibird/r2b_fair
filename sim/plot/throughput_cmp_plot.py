@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
 from datetime import datetime
 import numpy as np
+import math
 
-color_styles = ['#d73027', '#f46d43', '#fdae61', '#fee090', '#ffffbf', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4']
+color_styles = ['#d73027', '#f46d43', '#2c7bb6', '#fdae61', '#fee090', '#ffffbf', '#e0f3f8', '#abd9e9', '#74add1', '#4575b4']
 markers = ['x', 'o', '>', 'square', '*', '<']
+linestyles = ['solid', 'dashed', 'dashdot', 'dotted']
+client_labels = ['B, burst=3000', 'R, rserve=700', 'BE']
 
 
 def get_data_from_sim(file_name):
@@ -30,33 +33,34 @@ def io_plot(plot_data, save_img=False):
     count = 0
     for ys in plot_data:
         if count < (len(plot_data) - 1):
-            ax.plot(xs, ys, linewidth=2, color=color_styles[count], marker=markers[count], label="client " + str(count))
+            ax.plot(xs, ys, linewidth=2, color=color_styles[count], linestyle=linestyles[count], marker=markers[count], label=client_labels[count])
         count = count + 1
 
     # ax.xaxis.set_major_locator(plt.MultipleLocator(50))
     #ax.yaxis.set_major_locator(plt.MultipleLocator(10))
-    ax.set(xlim=(0, len(xs) - 1), ylim=(0, 5000))
-    ax.legend(loc='upper right')
+    ax.set(xlim=(0, len(xs) - 1), ylim=(0, 5200))
+    # ax.legend(loc='center right')
 
     font1 = {'family': 'Times New Roman',
              'weight': 'normal',
              'size': 16,
              }
-    plt.legend(loc='upper right', prop=font1)
-    plt.grid(color='0.7', linestyle=':')
+    ncol = int(math.ceil(6/2.))
+    plt.legend(ncol=ncol, loc='upper center', prop=font1)
+    plt.grid(axis='y', color='0.7', linestyle=':')
     plt.tick_params(labelsize=16)
     labels = ax.get_xticklabels() + ax.get_yticklabels()
-    # [label.set_fontname('Times New Roman') for label in labels]
+    [label.set_fontname('Times New Roman') for label in labels]
     ax.set_xlabel("Time (sec)", font1)
     ax.set_ylabel("IOPS", font1)
 
     if save_img:
-        date_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
-        plt.savefig("sim_plot" + str(date_str) + ".png")
+        date_str = datetime.now().strftime("%y%m%d%H%M%S")
+        plt.savefig("sim_plot" + str(date_str) + ".svg")
     plt.show()
 
 
 if __name__ == '__main__':
-    data = get_data_from_sim("sim.log")
-    io_plot(data)
+    data = get_data_from_sim("../ai_platform/ai_sim_631_iops_f.log")
+    io_plot(data, True)
     # print(data)

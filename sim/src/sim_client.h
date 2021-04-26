@@ -89,6 +89,7 @@ namespace crimson {
                 uint32_t track_resp_count;
                 uint32_t get_req_params_count;
                 std::vector<std::chrono::nanoseconds> resp_times;
+                std::vector<std::chrono::nanoseconds> req_times;
 
                 InternalStats() :
                         track_resp_time(0),
@@ -287,9 +288,10 @@ namespace crimson {
                             const ServerId &server = server_select_f(o);
 
                             ReqPm rp =
-                                    time_stats_w_return<decltype(internal_stats.get_req_params_time),
+                                    time_stats_w_return_log<decltype(internal_stats.get_req_params_time),
                                             ReqPm>(internal_stats.mtx,
                                                    internal_stats.get_req_params_time,
+                                                   internal_stats.req_times,
                                                    [&]() -> ReqPm {
                                                        return service_tracker.get_req_params(server);
                                                    });
@@ -303,13 +305,36 @@ namespace crimson {
                             l.lock(); // lock for return to top of loop
 
                             auto delay_time = now + i.args.req_params.time_bw_reqs;
+
+                            ////////////////// burst application /////////////////
+                            if (id == 0 && o > 0 && o % 60000 == 0) {// 60000, 9000
+                                delay_time += std::chrono::milliseconds(12000);
+                            }
+////////////////// burst application /////////////////
+
+////////////////// reservation application /////////////////
+                            if (id == 1 && o > 0 && o % 10000 == 0) {// 10000, 300
+                                delay_time += std::chrono::milliseconds(300);
+                            }
+////////////////// reservation application /////////////////
+
+////////////////// best effort application /////////////////
+                            if (id == 2 && o < 10000) {// 10000, 300
+                                delay_time += std::chrono::microseconds(10);
+                            }
+                            if (id == 2 && o < 60000 && o > 30000) {// 10000, 300
+                                delay_time += std::chrono::microseconds(20);
+                            }
+                            if (id == 2 && o < 100000 && o > 60000) {// 10000, 300
+                                delay_time += std::chrono::microseconds(70);
+                            }
                             while (std::chrono::steady_clock::now() < delay_time) {
                                 cv_req.wait_until(l, delay_time);
                             } // while
-                            if (client_info_f(id)->client_type == dmc::ClientType::B &&
-                                o > 0 && o % 60000 == 0) {
-                                std::this_thread::sleep_for(std::chrono::milliseconds(9000));
-                            }
+//                            if (client_info_f(id)->client_type == dmc::ClientType::B &&
+//                                o > 0 && o % 60000 == 0) {
+//                                std::this_thread::sleep_for(std::chrono::milliseconds(9000));
+//                            }
                         } // for
                         ops_count += i.args.req_params.count;
                     } else {

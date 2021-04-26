@@ -400,17 +400,38 @@ namespace crimson {
           for (uint i = 0; i < get_client_count(); ++i) {
               const auto& client = get_client(i);
               const auto& is = client.get_internal_stats();
-              std::vector<long> tmps;
-              for (auto t : is.resp_times) {
-                  tmps.push_back(std::chrono::duration_cast<T>(t).count());
+              std::vector<long> resp_times, req_times, total_times;
+
+              for (unsigned int c = 0; c < is.resp_times.size(); c++) {
+                  auto resp_t = is.resp_times[c];
+                  resp_times.push_back(std::chrono::duration_cast<T>(resp_t).count());
+                  auto req_t = is.req_times[c];
+                  req_times.push_back(std::chrono::duration_cast<T>(req_t).count());
+                  auto total_t = resp_t + req_t;
+                  total_times.push_back(std::chrono::duration_cast<T>(total_t).count());
               }
-              std::sort(tmps.begin(), tmps.end());
+//              for (auto t : is.resp_times) {
+//                  resp_times.push_back(std::chrono::duration_cast<T>(t).count());
+//              }
+//              for (auto t : is.req_times) {
+//                  req_times.push_back(std::chrono::duration_cast<T>(t).count());
+//              }
+
+              std::sort(resp_times.begin(), resp_times.end());
+              std::sort(req_times.begin(), req_times.end());
+              std::sort(total_times.begin(), total_times.end());
+              auto resp_accum = std::accumulate(resp_times.begin(), resp_times.end(), 0);
+              auto req_accum = std::accumulate(req_times.begin(), req_times.end(), 0);
+              auto total_accum = std::accumulate(total_times.begin(), total_times.end(), 0);
+
               out << "client " << i << "'s 95th" << " latency: ";
-              out << tmps[tmps.size() * 0.95] << std::endl;
+              out << resp_times[resp_times.size() * 0.95] << ", " << req_times[req_times.size() * 0.95] << ", " << total_times[total_times.size() * 0.95] << std::endl;
               out << "client " << i << "'s 99th" << " latency: ";
-              out << tmps[tmps.size() * 0.99] << std::endl;
+              out << resp_times[resp_times.size() * 0.99] << ", " << req_times[req_times.size() * 0.99] << ", " << total_times[total_times.size() * 0.99] << std::endl;
               out << "client " << i << "'s max" << " latency: ";
-              out << tmps[tmps.size() - 1] << std::endl << std::endl;
+              out << resp_times[resp_times.size() - 1] << ", " << req_times[req_times.size() - 1] << ", " << total_times[total_times.size() -1] << std::endl;
+              out << "client " << i << "'s average" << " latency: ";
+              out << resp_accum / resp_times.size() << ", " << req_accum / req_times.size() << ", " << total_accum / total_times.size() << std::endl << std::endl;
           }
       }
 

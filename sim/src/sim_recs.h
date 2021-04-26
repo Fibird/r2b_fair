@@ -88,6 +88,22 @@ namespace crimson {
       return result;
     }
 
+      template<typename T, typename R>
+      R time_stats_w_return_log(std::mutex& mtx,
+                            T& time_accumulate,
+                            std::vector<T>& req_times,
+                            std::function<R()> code) {
+          auto t1 = std::chrono::steady_clock::now();
+          R result = code();
+          auto t2 = std::chrono::steady_clock::now();
+          auto duration = t2 - t1;
+          auto cast_duration = std::chrono::duration_cast<T>(duration);
+          std::lock_guard<std::mutex> lock(mtx);
+          time_accumulate += cast_duration;
+          req_times.push_back(cast_duration);
+          return result;
+      }
+
     template<typename T>
     void count_stats(std::mutex& mtx,
 		     T& counter) {

@@ -964,11 +964,11 @@ namespace crimson {
                             new ClientInfo(client.info->reservation, client.deltar, client.dlimit, ClientType::R));
                     return info.get();
                 }
-                if (client.info->client_type == ClientType::B) {
-                    const std::shared_ptr<ClientInfo> info(
-                            new ClientInfo(0.0, client.info->weight, client.dlimit, ClientType::B));
-                    return info.get();
-                }
+//                if (client.info->client_type == ClientType::B) {
+//                    const std::shared_ptr<ClientInfo> info(
+//                            new ClientInfo(0.0, client.info->weight, client.dlimit, ClientType::B));
+//                    return info.get();
+//                }
                 return client.info;
             }
 

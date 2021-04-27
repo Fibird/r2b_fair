@@ -312,14 +312,14 @@ namespace crimson {
 
                             ////////////////// burst application /////////////////
                             if (id == 0 && o > 0 && o % 60000 == 0) {// 60000, 9000
-                                delay_time += std::chrono::milliseconds(12000);
+                                delay_time += std::chrono::milliseconds(15000);
                             }
 ////////////////// burst application /////////////////
 
 ////////////////// reservation application /////////////////
-                            if (id == 1 && o > 0 && o % 10000 == 0) {// 10000, 300
-                                delay_time += std::chrono::milliseconds(300);
-                            }
+//                            if (id == 1 && o > 0 && o % 10000 == 0) {// 10000, 300
+//                                delay_time += std::chrono::milliseconds(300);
+//                            }
 ////////////////// reservation application /////////////////
 
 ////////////////// best effort application /////////////////

@@ -288,19 +288,23 @@ namespace crimson {
                             const ServerId &server = server_select_f(o);
 
                             ReqPm rp =
-                                    time_stats_w_return_log<decltype(internal_stats.get_req_params_time),
+                                    time_stats_w_return<decltype(internal_stats.get_req_params_time),
                                             ReqPm>(internal_stats.mtx,
                                                    internal_stats.get_req_params_time,
-                                                   internal_stats.req_times,
                                                    [&]() -> ReqPm {
                                                        return service_tracker.get_req_params(server);
                                                    });
                             count_stats(internal_stats.mtx,
                                         internal_stats.get_req_params_count);
 
-                            submit_f(server,
-                                     TestRequest{server, static_cast<uint32_t>(o), 12},
-                                     id, rp);
+                            complete_time_stats(internal_stats.mtx,
+                                                internal_stats.req_times,
+                                                [&]() {
+                                                    submit_f(server,
+                                                             TestRequest{server, static_cast<uint32_t>(o), 12},
+                                                             id, rp);
+                                                });
+
                             ++outstanding_ops;
                             l.lock(); // lock for return to top of loop
 
@@ -375,13 +379,6 @@ namespace crimson {
                         TestResponse& resp = item.response;
 #endif
 
-//                        time_stats(internal_stats.mtx,
-//                                   internal_stats.track_resp_time,
-//                                   [&]() {
-//                                       service_tracker.track_resp(item.server_id, item.resp_params);
-//                                   });
-//                        count_stats(internal_stats.mtx,
-//                                    internal_stats.track_resp_count);
                         time_stats_log(internal_stats.mtx,
                                    internal_stats.track_resp_time,
                                    internal_stats.resp_times,

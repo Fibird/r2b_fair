@@ -353,7 +353,7 @@ namespace crimson {
                 c::IndIntruHeapData burst_heap_data{};
                 c::IndIntruHeapData best_heap_data{};
 //#if USE_PROP_HEAP
-                c::IndIntruHeapData prop_heap_data{};
+//                c::IndIntruHeapData prop_heap_data{};
 //#endif
 
             public:
@@ -555,10 +555,10 @@ namespace crimson {
             bool empty() const {
                 // TODO: to be modified
                 DataGuard g(data_mtx);
-	            return (prop_heap.empty() || ! prop_heap.top().has_request());
-//                return (resv_heap.empty() || !resv_heap.top().has_request()) &&
-//                       (burst_heap.empty() || !burst_heap.top().has_request()) &&
-//                       (prop_heap.empty() || !prop_heap.top().has_request());
+//	            return (prop_heap.empty() || ! prop_heap.top().has_request());
+                return (resv_heap.empty() || !resv_heap.top().has_request()) &&
+                       (burst_heap.empty() || !burst_heap.top().has_request()) &&
+                       (best_heap.empty() || !best_heap.top().has_request());
             }
 
 
@@ -572,13 +572,13 @@ namespace crimson {
                 // TODO: to be modified
                 DataGuard g(data_mtx);
                 size_t total = 0;
-//                for (auto i = resv_heap.cbegin(); i != resv_heap.cend(); ++i) {
-//                    total += i->request_count();
-//                }
-//                for (auto i = burst_heap.cbegin(); i != burst_heap.cend(); ++i) {
-//                    total += i->request_count();
-//                }
-                for (auto i = prop_heap.cbegin(); i != prop_heap.cend(); ++i) {
+                for (auto i = resv_heap.cbegin(); i != resv_heap.cend(); ++i) {
+                    total += i->request_count();
+                }
+                for (auto i = burst_heap.cbegin(); i != burst_heap.cend(); ++i) {
+                    total += i->request_count();
+                }
+                for (auto i = best_heap.cbegin(); i != best_heap.cend(); ++i) {
                     total += i->request_count();
                 }
                 return total;
@@ -597,7 +597,7 @@ namespace crimson {
                         if (i.second->info->client_type == ClientType::R) {
                             resv_heap.adjust(*i.second);
                             deltar_heap.adjust(*i.second);
-                            limit_heap.adjust(*i.second);
+//                            limit_heap.adjust(*i.second);
                         }
 
                         if (i.second->info->client_type == ClientType::B) {
@@ -609,7 +609,7 @@ namespace crimson {
                             best_heap.adjust(*i.second);
                         }
 
-                        prop_heap.adjust(*i.second);
+//                        prop_heap.adjust(*i.second);
 
                         any_removed = true;
                     }
@@ -652,7 +652,7 @@ namespace crimson {
                 if (i->second->info->client_type == ClientType::R) {
                     resv_heap.adjust(*i->second);
                     deltar_heap.adjust(*i->second);
-                    limit_heap.adjust(*i->second);
+//                    limit_heap.adjust(*i->second);
                     //reduce_total_reserv(i->second->info->reservation);
                 }
 
@@ -664,7 +664,7 @@ namespace crimson {
                     best_heap.adjust(*i->second);
                 }
 
-                prop_heap.adjust(*i->second);
+//                prop_heap.adjust(*i->second);
 
                 reduce_total_wgt(i->second->info->weight);
                 update_client_res();
@@ -742,9 +742,9 @@ namespace crimson {
                     burst_heap.display_sorted(out << "READY:", filter);
                 }
 //#if USE_PROP_HEAP
-                if (show_prop) {
-                    prop_heap.display_sorted(out << "PROPO:", filter);
-                }
+//                if (show_prop) {
+//                    prop_heap.display_sorted(out << "PROPO:", filter);
+//                }
 //#endif
             } // display_queues
 
@@ -832,13 +832,13 @@ namespace crimson {
                             true>,
                     B> deltar_heap;
 //#if USE_PROP_HEAP
-            c::IndIntruHeap<ClientRecRef,
-                    ClientRec,
-                    &ClientRec::prop_heap_data,
-                    ClientCompare<&RequestTag::proportion,
-                            ReadyOption::raises,
-                            true>,
-                    B> prop_heap;
+//            c::IndIntruHeap<ClientRecRef,
+//                    ClientRec,
+//                    &ClientRec::prop_heap_data,
+//                    ClientCompare<&RequestTag::proportion,
+//                            ReadyOption::raises,
+//                            true>,
+//                    B> prop_heap;
 //#endif
             c::IndIntruHeap<ClientRecRef,
                     ClientRec,
@@ -922,7 +922,7 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
-                ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out & std::ios_base::app);
+                ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
             }
 
             template<typename Rep, typename Per>
@@ -949,7 +949,7 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
-              ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out & std::ios_base::app);
+              ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
 
             }
 
@@ -1018,7 +1018,7 @@ namespace crimson {
                             std::make_shared<ClientRec>(client_id, info, tick);
                     if (info->client_type == ClientType::R) {
                         resv_heap.push(client_rec);
-                        limit_heap.push(client_rec);
+//                        limit_heap.push(client_rec);
                         deltar_heap.push(client_rec);
                     }
 
@@ -1031,7 +1031,7 @@ namespace crimson {
                         best_heap.push(client_rec);
                     }
 
-                    prop_heap.push(client_rec);
+//                    prop_heap.push(client_rec);
 
                     client_map[client_id] = client_rec;
                     add_total_wgt(info->weight);
@@ -1131,7 +1131,7 @@ namespace crimson {
                     // heaps?
                     if (client.info->client_type == ClientType::R) {
                         resv_heap.adjust(client);
-                        limit_heap.adjust(client);
+//                        limit_heap.adjust(client);
                         deltar_heap.adjust(client);
                     }
 
@@ -1144,7 +1144,7 @@ namespace crimson {
                         best_heap.adjust(client);
                     }
 
-                    prop_heap.adjust(client);
+//                    prop_heap.adjust(client);
                 }
 
                 client.cur_rho = req_params.rho;
@@ -1152,7 +1152,7 @@ namespace crimson {
 
                 if (client.info->client_type == ClientType::R) {
                     resv_heap.adjust(client);
-                    limit_heap.adjust(client);
+//                    limit_heap.adjust(client);
                     deltar_heap.adjust(client);
                 }
 
@@ -1165,7 +1165,7 @@ namespace crimson {
                     best_heap.adjust(client);
                 }
 
-                prop_heap.adjust(client);
+//                prop_heap.adjust(client);
             } // add_request
 
 
@@ -1214,7 +1214,7 @@ namespace crimson {
                     }
                     resv_heap.demote(top);
                     deltar_heap.demote(top);
-                    limit_heap.adjust(top);
+//                    limit_heap.adjust(top);
                 }
 
                 if (client_info->client_type == ClientType::B) {
@@ -1229,7 +1229,7 @@ namespace crimson {
                     best_heap.demote(top);
                 }
 
-                prop_heap.demote(top);
+//                prop_heap.demote(top);
 
 
                 // TODO: update counter in do_next_request
@@ -1281,7 +1281,7 @@ namespace crimson {
             NextReq do_next_request(Time now) {
                 // if proportional queue is empty, all are empty (i.e., no
                 // active clients)
-                if (prop_heap.empty()) {
+                if (resv_heap.empty() && burst_heap.empty() && best_heap.empty()) {
                     return NextReq::none();
                 }
 
@@ -1305,13 +1305,13 @@ namespace crimson {
                            !limits->next_request().tag.ready &&
                            limits->next_request().tag.limit <= now) {
                         limits->next_request().tag.ready = true;
-                        if (limits->info->client_type == ClientType::R) {
-                            deltar_heap.promote(*limits);
-                        }
-                        if (limits->info->client_type == ClientType::B) {
+//                        if (limits->info->client_type == ClientType::R) {
+//                            deltar_heap.promote(*limits);
+//                        }
+//                        if (limits->info->client_type == ClientType::B) {
                             burst_heap.promote(*limits);
-                        }
-                        prop_heap.promote(*limits);
+//                        }
+//                        prop_heap.promote(*limits);
                         limit_heap.demote(*limits);
 
                         limits = &limit_heap.top();
@@ -1340,23 +1340,23 @@ namespace crimson {
                 }
 
 
-                auto &props = prop_heap.top();
-                if (props.has_request() &&
-                    //(props.next_request().tag.ready || props.info->client_type == ClientType::A) &&
-                     props.next_request().tag.proportion < max_tag) {
-                    if (props.info->client_type == ClientType::R &&
-                        props.r0_counter < std::max(props.resource - props.info->reservation * win_size, 0.0)) {
-                        return NextReq(HeapId::prop);
-                    }
-                    if (props.info->client_type == ClientType::B &&
-                        props.next_request().tag.ready &&
-                        props.b_counter < std::max(props.resource, 0.0)) {
-                        return NextReq(HeapId::prop);
-                    }
-                    if (props.info->client_type == ClientType::A) {
-                        return NextReq(HeapId::prop);
-                    }
-                }
+//                auto &props = prop_heap.top();
+//                if (props.has_request() &&
+//                    //(props.next_request().tag.ready || props.info->client_type == ClientType::A) &&
+//                     props.next_request().tag.proportion < max_tag) {
+//                    if (props.info->client_type == ClientType::R &&
+//                        props.r0_counter < std::max(props.resource - props.info->reservation * win_size, 0.0)) {
+//                        return NextReq(HeapId::prop);
+//                    }
+//                    if (props.info->client_type == ClientType::B &&
+//                        props.next_request().tag.ready &&
+//                        props.b_counter < std::max(props.resource, 0.0)) {
+//                        return NextReq(HeapId::prop);
+//                    }
+//                    if (props.info->client_type == ClientType::A) {
+//                        return NextReq(HeapId::prop);
+//                    }
+//                }
 
                 if (!best_heap.empty()) {
                     auto &bests = best_heap.top();
@@ -1495,7 +1495,7 @@ namespace crimson {
                 if (client->info->client_type == ClientType::R) {
                     delete_from_heap(client, resv_heap);
                     delete_from_heap(client, deltar_heap);
-                    delete_from_heap(client, limit_heap);
+//                    delete_from_heap(client, limit_heap);
                 }
                 if (client->info->client_type == ClientType::A) {
                     delete_from_heap(client, best_heap);
@@ -1504,7 +1504,7 @@ namespace crimson {
                     delete_from_heap(client, limit_heap);
                     delete_from_heap(client, burst_heap);
                 }
-                delete_from_heap(client, prop_heap);
+//                delete_from_heap(client, prop_heap);
             }
 
             void set_win_size(Time _win_size) {
@@ -1790,11 +1790,11 @@ namespace crimson {
                                                    process_f(result, PhaseType::priority), now);
                         ++this->prop_sched_count;
                         break;
-                    case super::HeapId::prop:
-                        super::pop_process_request(this->prop_heap,
-                                                   process_f(result, PhaseType::priority), now, true);
-                        ++this->prop_sched_count;
-                        break;
+//                    case super::HeapId::prop:
+//                        super::pop_process_request(this->prop_heap,
+//                                                   process_f(result, PhaseType::priority), now, true);
+//                        ++this->prop_sched_count;
+//                        break;
                     default:
                         assert(false);
                 }
@@ -2080,10 +2080,10 @@ namespace crimson {
                         (void) submit_top_request(this->best_heap, PhaseType::priority);
                         ++this->prop_sched_count;
                         break;
-                    case super::HeapId::prop:
-                        (void) submit_top_request(this->prop_heap, PhaseType::priority, true);
-                        ++this->prop_sched_count;
-                        break;
+//                    case super::HeapId::prop:
+//                        (void) submit_top_request(this->prop_heap, PhaseType::priority, true);
+//                        ++this->prop_sched_count;
+//                        break;
                     default:
                         assert(false);
                 }

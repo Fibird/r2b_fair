@@ -52,6 +52,7 @@
 #include <thread>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <limits>
 
 #include <boost/variant.hpp>
@@ -372,6 +373,10 @@ namespace crimson {
                 uint32_t b_counter = 0;
                 // burst slice: t = resource * win_size / limit
                 Time burst_slice = 1.0;
+
+                // counter for test
+                uint32_t r_counter = 0;
+                uint32_t be_counter = 0;
 
                 ClientRec(C _client,
                           const ClientInfo *_info,
@@ -886,6 +891,8 @@ namespace crimson {
             double total_wgt = 0.0;
             double total_res = 0.0;
 
+            std::ofstream ofs;
+
             // NB: All threads declared at end, so they're destructed first!
 
             std::unique_ptr<RunEvery> cleaning_job;
@@ -915,6 +922,7 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
+                ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out & std::ios_base::app);
             }
 
             template<typename Rep, typename Per>
@@ -941,10 +949,13 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
+              ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out & std::ios_base::app);
+
             }
 
             ~PriorityQueueBase() {
                 finishing = true;
+                ofs.close();
             }
 
 
@@ -970,6 +981,12 @@ namespace crimson {
 //                    return info.get();
 //                }
                 return client.info;
+            }
+
+            void printScheduling(std::shared_ptr<ClientRec> client){
+              ofs << get_time() << client->info->client_type << ", " << client->client << ", "
+                << client->r_counter << ", " << client->r0_counter << ", " << client->b_counter << ", "
+                << client->be_counter << std::endl;
             }
 
             // data_mtx must be held by caller
@@ -1179,9 +1196,13 @@ namespace crimson {
 //    const ClientInfo* client_info = get_cli_info(top);
                 const ClientInfo *client_info = client_info_wrapper(top);
                 if (client_info->client_type == ClientType::R) {
-                    if (is_delta && (now - win_start) < win_size) {
+
+                    if (is_delta /*&& (now - win_start) < win_size*/) {
                         top.r0_counter++;
                         reduce_reservation_tags(top);
+                    }
+                    else{
+                      top.r_counter++;
                     }
                     resv_heap.demote(top);
                     deltar_heap.demote(top);
@@ -1196,6 +1217,7 @@ namespace crimson {
                     limit_heap.adjust(top);
                 }
                 if (client_info->client_type == ClientType::A) {
+                  top.be_counter++;
                     best_heap.demote(top);
                 }
 
@@ -1205,9 +1227,13 @@ namespace crimson {
                 // TODO: update counter in do_next_request
                 if (now - win_start >= win_size) {
                     for (auto c : client_map) {
+                      printScheduling(c.second);
                         c.second->b_counter = 0;
                         c.second->r0_counter = 0;
+                        c.second->r_counter = 0;
+                        c.second->be_counter = 0;
                     }
+                    ofs.flush();
                     win_start = std::max(win_start + win_size, now);
                 }
 

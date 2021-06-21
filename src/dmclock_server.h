@@ -992,7 +992,7 @@ namespace crimson {
               } else{
                 ctype = "A";
               }
-              ofs << get_time() << "," << ctype << ", " << client->client << ", "
+              ofs << get_time() << "," << ctype << "(" << client->info->reservation << ", " << client->info->weight << ", " << client->info->limit << ") "
                 << client->r_counter << ", " << client->r0_counter << ", " << client->b_counter << ", "
                 << client->be_counter << std::endl;
             }

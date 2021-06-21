@@ -984,7 +984,15 @@ namespace crimson {
             }
 
             void printScheduling(std::shared_ptr<ClientRec> client){
-              ofs << get_time() << client->info->client_type << ", " << client->client << ", "
+              std::string ctype;
+              if (ClientType::R == client->info->client_type){
+                ctype = "R";
+              } else if (ClientType::B == client->info->client_type){
+                ctype = "B";
+              } else{
+                ctype = "A";
+              }
+              ofs << get_time() << "," << ctype << ", " << client->client << ", "
                 << client->r_counter << ", " << client->r0_counter << ", " << client->b_counter << ", "
                 << client->be_counter << std::endl;
             }

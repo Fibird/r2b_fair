@@ -922,7 +922,7 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
-                ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
+                //ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
             }
 
             template<typename Rep, typename Per>
@@ -949,13 +949,13 @@ namespace crimson {
                         std::unique_ptr<RunEvery>(
                                 new RunEvery(check_time,
                                              std::bind(&PriorityQueueBase::do_clean, this)));
-              ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
+              //ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);
 
             }
 
             ~PriorityQueueBase() {
                 finishing = true;
-                ofs.close();
+                //ofs.close();
             }
 
 
@@ -1234,16 +1234,17 @@ namespace crimson {
 
                 // TODO: update counter in do_next_request
                 if (now - win_start >= win_size) {
-                    for (auto c : client_map) {
+                ofs.open("/root/swh/result/scheduling.txt", std::ios_base::out | std::ios_base::app);  
+		  for (auto c : client_map) {
                       printScheduling(c.second);
                         c.second->b_counter = 0;
                         c.second->r0_counter = 0;
                         c.second->r_counter = 0;
                         c.second->be_counter = 0;
                     }
-                    ofs.flush();
                     win_start = std::max(win_start + win_size, now);
-                }
+                ofs.close();
+		}
 
                 // process
                 process(top.client, request);
